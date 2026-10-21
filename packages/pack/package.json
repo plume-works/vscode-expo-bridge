@@ -1,0 +1,24 @@
+{
+  "name": "vscode-expo-bridge",
+  "displayName": "Expo Bridge",
+  "description": "Build, install, launch, and screenshot an Expo iOS app on the Mac host from a devcontainer, with EAS cloud as the fallback.",
+  "publisher": "plume-works",
+  "version": "0.0.0",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/plume-works/vscode-expo-bridge.git"
+  },
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": ["Extension Packs"],
+  "extensionPack": [
+    "plume-works.vscode-expo-bridge-host",
+    "plume-works.vscode-expo-bridge-workspace"
+  ],
+  "scripts": {
+    "build": "true",
+    "package": "vsce package --no-dependencies --out vscode-expo-bridge.vsix"
+  }
+}

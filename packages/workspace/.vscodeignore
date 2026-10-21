@@ -1,0 +1,7 @@
+src/**
+test/**
+bin/**
+tsconfig.json
+node_modules/**
+**/*.ts
+!dist/**

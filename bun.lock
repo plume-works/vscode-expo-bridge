@@ -18,6 +18,10 @@
         "@plume-works/expo-bridge-protocol": "workspace:*",
       },
     },
+    "packages/pack": {
+      "name": "vscode-expo-bridge",
+      "version": "0.0.0",
+    },
     "packages/protocol": {
       "name": "@plume-works/expo-bridge-protocol",
       "version": "0.0.0",
@@ -606,6 +610,8 @@
     "validate-npm-package-license": ["validate-npm-package-license@3.0.4", "", { "dependencies": { "spdx-correct": "^3.0.0", "spdx-expression-parse": "^3.0.0" } }, "sha512-DpKm2Ui/xN7/HQKCtpZxoRWBhZ9Z0kqtygG8XCgNQ8ZlDnxuQmWhj566j8fN4Cu3/JmbhsDo7fcAJq4s9h27Ew=="],
 
     "version-range": ["version-range@4.15.0", "", {}, "sha512-Ck0EJbAGxHwprkzFO966t4/5QkRuzh+/I1RxhLgUKKwEn+Cd8NwM60mE3AqBZg5gYODoXW0EFsQvbZjRlvdqbg=="],
+
+    "vscode-expo-bridge": ["vscode-expo-bridge@workspace:packages/pack"],
 
     "vscode-expo-bridge-host": ["vscode-expo-bridge-host@workspace:packages/host"],
 
