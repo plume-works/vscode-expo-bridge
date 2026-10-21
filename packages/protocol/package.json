@@ -1,0 +1,13 @@
+{
+  "name": "@plume-works/expo-bridge-protocol",
+  "version": "0.0.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "build": "tsc --build",
+    "package": "true"
+  }
+}

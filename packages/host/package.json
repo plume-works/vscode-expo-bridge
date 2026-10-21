@@ -1,0 +1,34 @@
+{
+  "name": "vscode-expo-bridge-host",
+  "displayName": "Expo Bridge (Host)",
+  "description": "Mac-side half of the Expo Bridge: builds, installs, launches, and screenshots an Expo iOS app for a devcontainer.",
+  "publisher": "plume-works",
+  "version": "0.0.0",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/plume-works/vscode-expo-bridge.git"
+  },
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": ["Other"],
+  "extensionKind": ["ui"],
+  "main": "./dist/extension.js",
+  "activationEvents": ["onStartupFinished"],
+  "contributes": {
+    "commands": [
+      { "command": "expoBridge.setToken", "title": "Expo Bridge: Set EXPO_TOKEN" },
+      { "command": "expoBridge.clearToken", "title": "Expo Bridge: Clear EXPO_TOKEN" },
+      { "command": "expoBridge.manageTrust", "title": "Expo Bridge: Manage Trusted Workspaces" },
+      { "command": "expoBridge.fix", "title": "Expo Bridge: Fix Missing Tools" }
+    ]
+  },
+  "scripts": {
+    "build": "bun build src/extension.ts --outdir dist --target node --format cjs --external vscode",
+    "package": "bun run build && vsce package --no-dependencies --out vscode-expo-bridge-host.vsix"
+  },
+  "dependencies": {
+    "@plume-works/expo-bridge-protocol": "workspace:*"
+  }
+}
