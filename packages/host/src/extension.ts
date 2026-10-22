@@ -121,11 +121,14 @@ export function activate(context: vscode.ExtensionContext): void {
   const globalStorage = context.globalStorageUri.fsPath;
   fs.mkdirSync(globalStorage, { recursive: true });
   const trust = new TrustStore(context.globalState, context.secrets, prompts());
+  // The fix re-checks status itself, so it needs the bun version the container last sent.
+  let lastContainerBunVersion: string | undefined;
 
   context.subscriptions.push(
     vscode.commands.registerCommand(
       DISPATCH_COMMAND,
       async (request: Request & { containerBunVersion?: string }) => {
+        if (request?.action === "status") lastContainerBunVersion = request.containerBunVersion;
         const make = buildDispatchDeps(trust, globalStorage, request?.containerBunVersion);
         const response = await dispatch(request, await make());
         if (request?.action === "status" && response.ok)
@@ -180,7 +183,7 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
 
     vscode.commands.registerCommand("expoBridge.fix", async () => {
-      const make = buildDispatchDeps(trust, globalStorage, undefined);
+      const make = buildDispatchDeps(trust, globalStorage, lastContainerBunVersion);
       const deps = await make();
       const current = await status(await deps.statusDeps({ action: "status" }));
       const steps = planFixes(current);

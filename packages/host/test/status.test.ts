@@ -169,6 +169,26 @@ describe("checks", () => {
     expect(r.checks.simulator.detail).toContain("no available iOS simulator runtime");
   });
 
+  test("easCli names the version build would run", async () => {
+    expect((await status(deps())).checks.easCli).toEqual({
+      ok: true,
+      detail: "eas-cli@latest (not pinned in package.json)",
+    });
+    fs.writeFileSync(
+      path.join(hostPath, "package.json"),
+      JSON.stringify({ devDependencies: { "eas-cli": "^16.3.0" } }),
+    );
+    expect((await status(deps())).checks.easCli).toEqual({ ok: true, detail: "eas-cli@^16.3.0" });
+  });
+
+  test("an eas-cli spec that is not a version range fails easCli", async () => {
+    fs.writeFileSync(
+      path.join(hostPath, "package.json"),
+      JSON.stringify({ devDependencies: { "eas-cli": "github:expo/eas-cli" } }),
+    );
+    expect((await status(deps())).checks.easCli.ok).toBe(false);
+  });
+
   test("missing projectId is reported", async () => {
     const r = await status(deps()); // no app.json written
     expect(r.checks.easProjectId.ok).toBe(false);

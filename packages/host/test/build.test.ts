@@ -52,7 +52,7 @@ function deps(partial: Partial<BuildDeps> = {}): BuildDeps {
     env: { PATH: BINS },
     token: "robot-token",
     runner: recordingRunner([]),
-    fileExists: (p) => p === `${BINS}/eas` || fs.existsSync(p),
+    fileExists: (p) => p === `${BINS}/bun` || fs.existsSync(p),
     confirmed: true,
     now: () => 123,
     ...partial,
@@ -89,13 +89,43 @@ describe("validation", () => {
 });
 
 describe("invocation", () => {
+  test("runs the eas-cli version package.json pins, devDependencies first", async () => {
+    fs.writeFileSync(
+      path.join(hostPath, "package.json"),
+      JSON.stringify({
+        dependencies: { "eas-cli": "16.0.0" },
+        devDependencies: { "eas-cli": ">=16.2.0 <17" },
+      }),
+    );
+    const captured: Captured[] = [];
+    await build("development", deps({ runner: recordingRunner(captured) }));
+    expect(captured[0]!.args.slice(0, 3)).toEqual(["x", "eas-cli@>=16.2.0 <17", "build"]);
+  });
+
+  test("refuses a package.json eas-cli spec that is not a version range", async () => {
+    fs.writeFileSync(
+      path.join(hostPath, "package.json"),
+      JSON.stringify({ devDependencies: { "eas-cli": "file:../evil" } }),
+    );
+    const captured: Captured[] = [];
+    try {
+      await build("development", deps({ runner: recordingRunner(captured) }));
+      throw new Error("should have thrown");
+    } catch (e) {
+      expect((e as BuildError).error.code).toBe("bad-argument");
+    }
+    expect(captured).toHaveLength(0);
+  });
+
   test("runs eas build --local with the right args, env, and cwd", async () => {
     const captured: Captured[] = [];
     await build("development", deps({ runner: recordingRunner(captured) }));
     expect(captured).toHaveLength(1);
     const c = captured[0]!;
-    expect(c.file).toBe(`${BINS}/eas`);
+    expect(c.file).toBe(`${BINS}/bun`);
     expect(c.args).toEqual([
+      "x",
+      "eas-cli@latest",
       "build",
       "--local",
       "--non-interactive",

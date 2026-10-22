@@ -39,8 +39,8 @@ user's consent:
   unsandboxed. Project code in it — lifecycle scripts, `eas-build-*` hooks, `app.config.js`,
   config plugins, the `Podfile`, Xcode build phases — can do anything the user can. Trust
   and the build confirmation are the only gate on it.
-- **No project code outside `build`.** The host extension reads `eas.json` and `app.json`
-  as JSON only, refusing a symlink, a non-regular file, or a file over 1 MiB, and never
+- **No project code outside `build`.** The host extension reads `eas.json`, `app.json`,
+  and `package.json` as JSON only, refusing a symlink, a non-regular file, or a file over 1 MiB, and never
   evaluates a project file as code. No error returned to the container quotes the contents
   of a file the host read.
 - **Management commands change nothing on their own.** Setting or clearing the token,
@@ -90,7 +90,8 @@ asks for trust and reports the answer rather than failing.
 
 `checks` holds one `{ ok, detail? }` per item: `macHost`, `hostPathExists`,
 `workspaceTrusted`, `xcode` (a full Xcode that runs `xcodebuild`), `cocoapods`,
-`fastlane`, `node`, `bun` (present on the Mac and at least as new as
+`fastlane`, `node`, `easCli` (the eas-cli version `build` runs; fails when `package.json`
+pins one that is not a version range), `bun` (present on the Mac and at least as new as
 `containerBunVersion`), `expoToken` (stored in SecretStorage), `easProjectId`
 (`extra.eas.projectId` in `app.json`), `simulator` (a simulator is booted, or one can be
 booted on demand; the detail names the device that would boot), and `port8081Forwarded`
@@ -104,10 +105,14 @@ booted on demand; the detail names the device that would boot), and `port8081For
 workspace's `eas.json`. After trust and the confirmation, the host runs
 
 ```
-eas build --local --non-interactive -p ios --profile <profile>
+bunx eas-cli@<spec> build --local --non-interactive -p ios --profile <profile>
 ```
 
-in the workspace's host path, with the user's login environment plus `EXPO_TOKEN` from
+with the Mac's bun. `<spec>` is the `eas-cli` entry of the workspace's `package.json`,
+`devDependencies` before `dependencies`, read as JSON only; it must be a semver version or
+range, and anything else (`file:`, git, URL, alias, dist-tag) fails the build with
+`bad-argument`. With no entry, `<spec>` is `latest`. The build runs in the workspace's host
+path, with the user's login environment plus `EXPO_TOKEN` from
 SecretStorage, `EAS_NO_VCS=1`, `CI=1`, and `EAS_LOCAL_BUILD_ARTIFACTS_DIR` set to a fresh
 directory in the host extension's private global storage. The log streams into a fresh
 `.tmp/expo-bridge/build-<ms>.log` while the build runs; `eas-host` tails it. The artifact

@@ -3,6 +3,7 @@ import type { StatusCheck, StatusResult } from "@plume-works/expo-bridge-protoco
 import { PROTOCOL_VERSION } from "@plume-works/expo-bridge-protocol";
 import type { Runner } from "./exec";
 import { lookupTool } from "./env";
+import { EasCliError, easCliSpec } from "./eascli";
 import { readJsonFile } from "./jsonfile";
 import { planBoot, SimulatorError } from "./simulator";
 
@@ -64,6 +65,7 @@ export async function status(d: StatusDeps): Promise<StatusResult> {
       cocoapods: { ok: false },
       fastlane: { ok: false },
       node: { ok: false },
+      easCli: { ok: false },
       bun: { ok: false },
       expoToken: { ok: d.hasToken, detail: d.hasToken ? undefined : "EXPO_TOKEN not set" },
       easProjectId: { ok: false },
@@ -93,6 +95,8 @@ export async function status(d: StatusDeps): Promise<StatusResult> {
   const node = await toolVersion(d, "node", ["--version"]);
   base.checks.node = node ? { ok: true } : { ok: false, detail: "Node not found" };
 
+  base.checks.easCli = easCliCheck(d);
+
   const hostBun = await toolVersion(d, "bun", ["--version"]);
   if (!hostBun) {
     base.checks.bun = { ok: false, detail: "bun not found on the Mac" };
@@ -112,6 +116,19 @@ export async function status(d: StatusDeps): Promise<StatusResult> {
   base.checks.simulator = await simulatorCheck(d);
 
   return base;
+}
+
+/** Which eas-cli `build` would run; fails only on a spec that is not a version range. */
+function easCliCheck(d: StatusDeps): StatusCheck {
+  try {
+    const spec = easCliSpec(d.hostPath, d.fileExists);
+    return spec === "latest"
+      ? { ok: true, detail: "eas-cli@latest (not pinned in package.json)" }
+      : { ok: true, detail: `eas-cli@${spec}` };
+  } catch (e) {
+    if (e instanceof EasCliError) return { ok: false, detail: e.message };
+    throw e;
+  }
 }
 
 function readProjectId(hostPath: string, fileExists: (p: string) => boolean): boolean {

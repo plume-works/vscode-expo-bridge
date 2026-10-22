@@ -66,6 +66,7 @@ export interface StatusResult {
     cocoapods: StatusCheck;
     fastlane: StatusCheck;
     node: StatusCheck;
+    easCli: StatusCheck;
     bun: StatusCheck;
     expoToken: StatusCheck;
     easProjectId: StatusCheck;
