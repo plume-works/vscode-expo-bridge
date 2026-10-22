@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.3
+      - run: bun install --frozen-lockfile
+      - name: Lint
+        run: bun run lint
+      - name: Typecheck
+        run: bun run typecheck
+      - name: Test
+        run: bun test
+      - name: Package all three VSIX
+        run: bun run package
+      - name: Confirm the three VSIX were produced
+        run: |
+          set -euo pipefail
+          test -f packages/host/vscode-expo-bridge-host.vsix
+          test -f packages/workspace/vscode-expo-bridge-workspace.vsix
+          test -f packages/pack/vscode-expo-bridge.vsix
