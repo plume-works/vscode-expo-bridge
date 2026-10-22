@@ -139,9 +139,13 @@ has booted. With no available iOS runtime the action fails with `action-failed`.
 
 ### `launch`
 
-Starts the app `install` last installed in this VS Code session, by its recorded bundle
-identifier, with `xcrun simctl launch <udid>`. Fails with `not-found` when nothing was
-installed.
+Starts the app `install` last installed in this VS Code session. When its `Info.plist`
+declares an expo-dev-client scheme (`exp+` followed by a plain name), `install` records it
+and `launch` opens the development build at Metro with
+`xcrun simctl openurl <udid> <scheme>://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081`,
+so it loads the bundle over the forwarded port without a tap. Otherwise it runs
+`xcrun simctl launch <udid> <bundle id>`. The URL is fixed by the host; the container
+supplies none of it. Fails with `not-found` when nothing was installed.
 
 ### `screenshot`
 
@@ -202,8 +206,10 @@ treats any non-zero `eas-host status` as "use EAS cloud".
 
 ## Fixes are not protocol actions
 
-When `status` finds a tool the one-click fix can install, the host extension shows a
-notification with a **Fix…** button. Only that click, or running **Expo Bridge: Fix Missing
-Tools** directly, starts a fix: Homebrew installs in a visible local terminal, and for Xcode
+When `status` finds a tool the one-click fix can install, the host extension shows a status
+bar item in the Mac window naming the number of fixes, with each failing check's detail in
+its tooltip. It stays until a later `status` finds nothing to fix. Clicking it, or running
+**Expo Bridge: Fix Missing Tools**, opens a picker that stays open when focus moves; only
+picking a fix there starts one: Homebrew installs in a visible local terminal, and for Xcode
 the App Store page followed by `xcode-select`, the license acceptance, and
 `xcodebuild -downloadPlatform iOS`. No protocol action can start a fix.

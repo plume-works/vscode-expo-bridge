@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { StatusResult } from "@plume-works/expo-bridge-protocol";
 import { PROTOCOL_VERSION } from "@plume-works/expo-bridge-protocol";
-import { planFixes } from "../src/fix";
+import { fixSummary, planFixes } from "../src/fix";
 
 function statusWith(
   overrides: Partial<Record<keyof StatusResult["checks"], boolean>>,
@@ -66,5 +66,20 @@ describe("planFixes", () => {
       }),
     );
     expect(steps).toEqual([]);
+  });
+});
+
+describe("fixSummary", () => {
+  test("nothing to fix shows nothing", () => {
+    expect(fixSummary([])).toBeNull();
+  });
+
+  test("counts the fixes and puts each check's detail in the tooltip", () => {
+    const s = statusWith({ bun: false, fastlane: false });
+    s.checks.bun.detail = "Mac bun 1.4.3 is older than the container's 99.0.0";
+    const summary = fixSummary(planFixes(s));
+    expect(summary?.text).toBe("$(warning) Expo Bridge: 2 fixes");
+    expect(summary?.tooltip).toContain("Install or update bun: Mac bun 1.4.3 is older");
+    expect(summary?.text).not.toContain("missing");
   });
 });

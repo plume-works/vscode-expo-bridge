@@ -3,6 +3,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { PROTOCOL_VERSION } from "@plume-works/expo-bridge-protocol";
+import type { InstalledApp } from "../src/install";
 import { dispatch, type DispatchDeps } from "../src/dispatch";
 import type { Runner } from "../src/exec";
 import type { StatusDeps } from "../src/status";
@@ -10,14 +11,14 @@ import type { StatusDeps } from "../src/status";
 let hostPath: string;
 let storage: string;
 const BINS = "/opt/homebrew/bin";
-let lastBundle: string | undefined;
+let lastApp: InstalledApp | undefined;
 
 beforeEach(() => {
   hostPath = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "expo-bridge-disp-")));
   storage = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "expo-bridge-disp-store-")));
   fs.mkdirSync(path.join(hostPath, ".tmp", "expo-bridge"), { recursive: true });
   fs.writeFileSync(path.join(hostPath, "eas.json"), JSON.stringify({ build: { development: {} } }));
-  lastBundle = undefined;
+  lastApp = undefined;
 });
 
 afterEach(() => {
@@ -54,8 +55,8 @@ function deps(partial: Partial<DispatchDeps> = {}): DispatchDeps {
     env: { PATH: BINS },
     runner: okRunner,
     fileExists,
-    getLastBundleId: () => lastBundle,
-    setLastBundleId: (id: string) => (lastBundle = id),
+    getLastApp: () => lastApp,
+    setLastApp: (app: InstalledApp) => (lastApp = app),
     now: () => 1,
   });
   return {
