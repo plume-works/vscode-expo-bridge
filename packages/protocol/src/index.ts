@@ -69,7 +69,7 @@ export interface StatusResult {
     bun: StatusCheck;
     expoToken: StatusCheck;
     easProjectId: StatusCheck;
-    bootedSimulator: StatusCheck;
+    simulator: StatusCheck;
     port8081Forwarded: StatusCheck;
   };
 }

@@ -13,7 +13,7 @@ export interface FixStep {
 /**
  * Map each failing status check that a tool install resolves to a fix step. A fix is only
  * ever started by the user's click — no protocol action reaches this. Checks with no
- * install remedy (trust, token, projectId, booted simulator, port forwarding, host path,
+ * install remedy (trust, token, projectId, simulator, port forwarding, host path,
  * Mac host) produce no step.
  */
 export function planFixes(status: StatusResult): FixStep[] {

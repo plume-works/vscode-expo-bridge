@@ -92,7 +92,8 @@ asks for trust and reports the answer rather than failing.
 `workspaceTrusted`, `xcode` (a full Xcode that runs `xcodebuild`), `cocoapods`,
 `fastlane`, `node`, `bun` (present on the Mac and at least as new as
 `containerBunVersion`), `expoToken` (stored in SecretStorage), `easProjectId`
-(`extra.eas.projectId` in `app.json`), `bootedSimulator`, and `port8081Forwarded`
+(`extra.eas.projectId` in `app.json`), `simulator` (a simulator is booted, or one can be
+booted on demand; the detail names the device that would boot), and `port8081Forwarded`
 (`127.0.0.1:8081` on the Mac accepts a connection).
 
 `protocolVersion` carries the host's protocol version, currently `1`.
@@ -121,18 +122,26 @@ The host unpacks it with `tar -xk` into a fresh directory in its private global 
 bsdtar refuses `..` entries and strips a leading `/` — and rejects the artifact when any
 symlink landed in the tree. It reads `CFBundleIdentifier` from the `.app`'s `Info.plist`
 through `plutil`, rejects a value outside `^[A-Za-z0-9][A-Za-z0-9.-]*$`, and installs the
-`.app` on the booted simulator with `xcrun simctl install booted`.
+`.app` on the simulator with `xcrun simctl install <udid>`.
+
+### The simulator
+
+`install`, `launch`, and `screenshot` act on one simulator, addressed by UDID. When one is
+booted, they use it. Otherwise the host boots, headless, an available iPhone on the newest
+available iOS runtime, creating `expo-bridge <device type>` from that runtime's newest
+iPhone type when none exists, and waits with `xcrun simctl bootstatus <udid> -b` until it
+has booted. With no available iOS runtime the action fails with `action-failed`.
 
 ### `launch`
 
 Starts the app `install` last installed in this VS Code session, by its recorded bundle
-identifier, with `xcrun simctl launch booted`. Fails with `not-found` when nothing was
+identifier, with `xcrun simctl launch <udid>`. Fails with `not-found` when nothing was
 installed.
 
 ### `screenshot`
 
-Captures the booted simulator with `xcrun simctl io booted screenshot` into private
-storage, then copies the PNG to a fresh `.tmp/expo-bridge/screenshot-<ms>.png`.
+Captures the simulator with `xcrun simctl io <udid> screenshot` into private storage,
+then copies the PNG to a fresh `.tmp/expo-bridge/screenshot-<ms>.png`.
 
 ## Paths and the write boundary
 

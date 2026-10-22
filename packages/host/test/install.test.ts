@@ -8,6 +8,7 @@ import { ActionError, install, launch, screenshot, type SimContext } from "../sr
 let hostPath: string;
 let storage: string;
 const BINS = "/opt/homebrew/bin";
+const SIM = "SIM-UDID-1";
 let lastBundleId: string | undefined;
 
 beforeEach(() => {
@@ -29,7 +30,7 @@ interface Captured {
 
 /**
  * A runner that fakes `tar -x` (writing a .app whose Info.plist is binary, as a simulator
- * build's is), `plutil -convert json`, and simctl.
+ * build's is), `plutil -convert json`, and simctl, with one simulator already booted.
  */
 function runner(
   captured: Captured[],
@@ -52,6 +53,10 @@ function runner(
       }
       if (file.endsWith("plutil")) {
         return { code: 0, stdout: JSON.stringify({ CFBundleIdentifier: bundleId }), stderr: "" };
+      }
+      if (args[0] === "simctl" && args[1] === "list") {
+        const devices = { ios: [{ udid: SIM, name: "iPhone 17", state: "Booted" }] };
+        return { code: 0, stdout: JSON.stringify({ devices }), stderr: "" };
       }
       if (args[0] === "simctl" && args[1] === "io") {
         if (simResult.code === 0) fs.writeFileSync(args[4]!, "PNGDATA");
@@ -94,14 +99,14 @@ describe("install", () => {
     }
   });
 
-  test("unpacks, installs on the booted simulator, and returns the bundle id", async () => {
+  test("unpacks, installs on the booted simulator by its UDID, and returns the bundle id", async () => {
     const rel = writeArtifact();
     const captured: Captured[] = [];
     const r = await install(rel, ctx({ runner: runner(captured) }));
     expect(r.bundleIdentifier).toBe("com.example.myapp");
     expect(lastBundleId).toBe("com.example.myapp");
     const simInstall = captured.find((c) => c.args[0] === "simctl" && c.args[1] === "install");
-    expect(simInstall?.args.slice(0, 3)).toEqual(["simctl", "install", "booted"]);
+    expect(simInstall?.args.slice(0, 3)).toEqual(["simctl", "install", SIM]);
     const plutil = captured.find((c) => c.file.endsWith("plutil"));
     expect(plutil?.args.slice(0, 4)).toEqual(["-convert", "json", "-o", "-"]);
     expect(plutil?.args[4]?.startsWith(storage)).toBe(true);
@@ -157,8 +162,8 @@ describe("launch", () => {
     const captured: Captured[] = [];
     const r = await launch(ctx({ runner: runner(captured) }));
     expect(r.bundleIdentifier).toBe("com.example.myapp");
-    const c = captured.find((x) => x.args[0] === "simctl");
-    expect(c?.args).toEqual(["simctl", "launch", "booted", "com.example.myapp"]);
+    const c = captured.find((x) => x.args[1] === "launch");
+    expect(c?.args).toEqual(["simctl", "launch", SIM, "com.example.myapp"]);
   });
 
   test("fails when nothing was installed", async () => {
@@ -177,8 +182,8 @@ describe("screenshot", () => {
     const r = await screenshot(ctx({ runner: runner(captured) }));
     expect(r.screenshotRel.startsWith(".tmp/expo-bridge/")).toBe(true);
     expect(r.screenshotRel.endsWith(".png")).toBe(true);
-    const c = captured.find((x) => x.args[0] === "simctl");
-    expect(c?.args.slice(0, 4)).toEqual(["simctl", "io", "booted", "screenshot"]);
+    const c = captured.find((x) => x.args[1] === "io");
+    expect(c?.args.slice(0, 4)).toEqual(["simctl", "io", SIM, "screenshot"]);
     expect(c?.args[4]?.startsWith(storage)).toBe(true);
     expect(fs.readFileSync(path.join(hostPath, r.screenshotRel), "utf8")).toBe("PNGDATA");
   });
