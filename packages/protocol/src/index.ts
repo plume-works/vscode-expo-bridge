@@ -103,8 +103,7 @@ export type Result =
   | ScreenshotResult;
 
 export type ErrorCode =
-  | "untrusted" // the workspace is not trusted on the Mac
-  | "trust-declined" // trust was declined and not revoked
+  | "untrusted" // the workspace is not trusted on the Mac (declined or dismissed)
   | "build-declined" // the per-build confirmation was declined
   | "unavailable" // non-Mac host, or the workspace host path does not exist
   | "bad-request" // malformed request or an unknown action
