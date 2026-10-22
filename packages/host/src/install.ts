@@ -20,7 +20,7 @@ export class ActionError extends Error {
 
 export interface InstalledApp {
   bundleId: string;
-  /** The expo-dev-client `exp+…` URL scheme, when the app declares one. */
+  /** The expo-dev-client `exp+…` URL scheme; its presence marks a development build. */
   devScheme?: string;
 }
 
@@ -98,24 +98,21 @@ export async function install(artifactRel: string, ctx: SimContext): Promise<Ins
 }
 
 /**
- * Launch the app that `install` last installed. A development build is opened at Metro
- * through its `exp+…` scheme so it loads the bundle; any other app is launched plainly.
+ * Launch the app that `install` last installed. A development build is restarted with
+ * expo-dev-client's `--initialUrl` so it loads Metro's bundle; `openurl` would prompt.
  */
 export async function launch(ctx: SimContext): Promise<LaunchResult> {
   const app = ctx.getLastApp();
   if (!app) throw new ActionError({ code: "not-found", message: "nothing installed yet" });
   const udid = await simulator(ctx);
   const args = app.devScheme
-    ? ["simctl", "openurl", udid, devClientUrl(app.devScheme)]
+    ? ["simctl", "launch", "--terminate-running-process", udid, app.bundleId]
     : ["simctl", "launch", udid, app.bundleId];
+  if (app.devScheme) args.push("--initialUrl", METRO_URL);
   const r = await ctx.runner.run(xcrun(ctx), args, { env: ctx.env });
   if (r.code !== 0)
     throw new ActionError({ code: "action-failed", message: "simctl launch failed" });
   return { bundleIdentifier: app.bundleId };
-}
-
-export function devClientUrl(scheme: string): string {
-  return `${scheme}://expo-development-client/?url=${encodeURIComponent(METRO_URL)}`;
 }
 
 /**

@@ -3,7 +3,7 @@
   "displayName": "Expo Bridge (Workspace)",
   "description": "Container-side half of the Expo Bridge: installs the eas-host command and bridges it to the Mac host.",
   "publisher": "plume-works",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "license": "MIT",
   "repository": {
     "type": "git",

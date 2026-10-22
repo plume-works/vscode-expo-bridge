@@ -5,7 +5,6 @@ import * as path from "node:path";
 import type { ExecResult, Runner } from "../src/exec";
 import {
   ActionError,
-  devClientUrl,
   install,
   type InstalledApp,
   launch,
@@ -196,24 +195,21 @@ describe("launch", () => {
     expect(c?.args).toEqual(["simctl", "launch", SIM, "com.example.myapp"]);
   });
 
-  test("opens a development build at Metro through its exp+ scheme", async () => {
+  test("restarts a development build with --initialUrl pointing at Metro", async () => {
     lastApp = { bundleId: "com.example.myapp", devScheme: "exp+myapp" };
     const captured: Captured[] = [];
     await launch(ctx({ runner: runner(captured) }));
-    const c = captured.find((x) => x.args[1] === "openurl");
+    const c = captured.find((x) => x.args[1] === "launch");
     expect(c?.args).toEqual([
       "simctl",
-      "openurl",
+      "launch",
+      "--terminate-running-process",
       SIM,
-      "exp+myapp://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081",
+      "com.example.myapp",
+      "--initialUrl",
+      "http://localhost:8081",
     ]);
-    expect(captured.some((x) => x.args[1] === "launch")).toBe(false);
-  });
-
-  test("devClientUrl points at the forwarded Metro port", () => {
-    expect(devClientUrl("exp+a")).toBe(
-      "exp+a://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081",
-    );
+    expect(captured.some((x) => x.args[1] === "openurl")).toBe(false);
   });
 
   test("fails when nothing was installed", async () => {
