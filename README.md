@@ -24,6 +24,7 @@ packages/
   host/        the ui-kind host extension
   workspace/   the workspace-kind extension and the eas-host CLI
   pack/        the extension pack listing both extensions
+  release/     the version bump script
 ```
 
 ## Development
@@ -34,4 +35,12 @@ bun run lint        # prettier --check
 bun run typecheck   # tsc across every package
 bun test            # unit + CLI end-to-end tests
 bun run package     # build and package all three VSIX
+bun run bump        # next patch version for all three extensions
 ```
+
+## Versioning
+
+The pack and both extensions always carry the same version. An odd minor is a pre-release
+line and an even minor a release, since the galleries accept only `major.minor.patch`.
+Every change bumps the patch with `bun run bump`; `bun run bump <version>` starts a new
+minor line.

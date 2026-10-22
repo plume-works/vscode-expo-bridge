@@ -1,4 +1,5 @@
 import * as fs from "node:fs";
+import * as os from "node:os";
 import * as vscode from "vscode";
 import type { BuildDecision, Prompts, TrustDecision } from "./trust";
 import { TrustStore } from "./trust";
@@ -121,7 +122,11 @@ export function activate(context: vscode.ExtensionContext): void {
   const trust = new TrustStore(context.globalState, context.secrets, prompts());
   // The fix re-checks status itself, so it needs the bun version the container last sent.
   let lastContainerBunVersion: string | undefined;
-  const fixItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left);
+  const fixItem = vscode.window.createStatusBarItem(
+    "expoBridge.fixes",
+    vscode.StatusBarAlignment.Left,
+  );
+  fixItem.name = "Expo Bridge";
   fixItem.command = "expoBridge.fix";
   context.subscriptions.push(fixItem);
 
@@ -207,7 +212,11 @@ export function activate(context: vscode.ExtensionContext): void {
         );
         if (proceed !== "Continue") return;
       }
-      const terminal = vscode.window.createTerminal({ name: "Expo Bridge fix" });
+      // A file: cwd binds the terminal to the Mac; otherwise a remote window opens it remotely.
+      const terminal = vscode.window.createTerminal({
+        name: "Expo Bridge fix",
+        cwd: vscode.Uri.file(os.homedir()),
+      });
       terminal.show();
       for (const cmd of pick.step.commands) terminal.sendText(cmd);
     }),
