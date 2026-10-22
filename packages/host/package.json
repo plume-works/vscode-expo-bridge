@@ -3,14 +3,14 @@
   "displayName": "Expo Bridge (Host)",
   "description": "Mac-side half of the Expo Bridge: builds, installs, launches, and screenshots an Expo iOS app for a devcontainer.",
   "publisher": "plume-works",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/plume-works/vscode-expo-bridge.git"
   },
   "engines": {
-    "vscode": "^1.90.0"
+    "vscode": "^1.93.0"
   },
   "categories": [
     "Other"

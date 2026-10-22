@@ -8,6 +8,7 @@ import { decodeHostPath } from "./hostpath";
 import { captureLoginEnv } from "./env";
 import { realRunner } from "./exec";
 import { fixSummary, planFixes } from "./fix";
+import { FixGate, runCommands, type RunCommand } from "./fixrun";
 import type { InstalledApp } from "./install";
 import { portAcceptsConnections } from "./port";
 import { status } from "./status";
@@ -52,6 +53,44 @@ function showFixes(item: vscode.StatusBarItem, result: StatusResult): void {
   item.text = summary.text;
   item.tooltip = summary.tooltip;
   item.show();
+}
+
+/** How long to wait for shell integration before typing the commands without it. */
+const SHELL_INTEGRATION_WAIT_MS = 5000;
+
+/** A RunCommand for `terminal` that reports exit codes, or null without shell integration. */
+async function shellRunner(terminal: vscode.Terminal): Promise<RunCommand | null> {
+  const si =
+    terminal.shellIntegration ??
+    (await new Promise<vscode.TerminalShellIntegration | undefined>((resolve) => {
+      const sub = vscode.window.onDidChangeTerminalShellIntegration((e) => {
+        if (e.terminal !== terminal) return;
+        sub.dispose();
+        resolve(e.shellIntegration);
+      });
+      setTimeout(() => (sub.dispose(), resolve(undefined)), SHELL_INTEGRATION_WAIT_MS);
+    }));
+  if (!si) return null;
+  return (command) =>
+    new Promise((resolve) => {
+      const execution = si.executeCommand(command);
+      const sub = vscode.window.onDidEndTerminalShellExecution((e) => {
+        if (e.execution !== execution) return;
+        sub.dispose();
+        resolve(e.exitCode);
+      });
+    });
+}
+
+/** Resolves when `terminal` closes. */
+function closed(terminal: vscode.Terminal): Promise<void> {
+  return new Promise((resolve) => {
+    const sub = vscode.window.onDidCloseTerminal((t) => {
+      if (t !== terminal) return;
+      sub.dispose();
+      resolve();
+    });
+  });
 }
 
 /** The host path of this window's own remote authority — never the container's claim. */
@@ -129,6 +168,13 @@ export function activate(context: vscode.ExtensionContext): void {
   fixItem.name = "Expo Bridge";
   fixItem.command = "expoBridge.fix";
   context.subscriptions.push(fixItem);
+  const fixGate = new FixGate();
+  const recheck = async () => {
+    const deps = await buildDispatchDeps(trust, globalStorage, lastContainerBunVersion)();
+    const current = await status(await deps.statusDeps({ action: "status" }));
+    showFixes(fixItem, current);
+    return current;
+  };
 
   context.subscriptions.push(
     vscode.commands.registerCommand(
@@ -189,11 +235,11 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
 
     vscode.commands.registerCommand("expoBridge.fix", async () => {
-      const make = buildDispatchDeps(trust, globalStorage, lastContainerBunVersion);
-      const deps = await make();
-      const current = await status(await deps.statusDeps({ action: "status" }));
-      showFixes(fixItem, current);
-      const steps = planFixes(current);
+      if (fixGate.running) {
+        void vscode.window.showInformationMessage("Expo Bridge: a fix is already running.");
+        return;
+      }
+      const steps = planFixes(await recheck());
       if (!steps.length) {
         void vscode.window.showInformationMessage("Expo Bridge: nothing to fix.");
         return;
@@ -212,13 +258,31 @@ export function activate(context: vscode.ExtensionContext): void {
         );
         if (proceed !== "Continue") return;
       }
-      // A file: cwd binds the terminal to the Mac; otherwise a remote window opens it remotely.
-      const terminal = vscode.window.createTerminal({
-        name: "Expo Bridge fix",
-        cwd: vscode.Uri.file(os.homedir()),
+      await fixGate.run(async () => {
+        fixItem.text = "$(sync~spin) Expo Bridge: fixing…";
+        fixItem.tooltip = pick.step.label;
+        fixItem.command = undefined;
+        try {
+          // A file: cwd binds the terminal to the Mac; otherwise a remote window opens it remotely.
+          const terminal = vscode.window.createTerminal({
+            name: "Expo Bridge fix",
+            cwd: vscode.Uri.file(os.homedir()),
+          });
+          terminal.show();
+          const run = await shellRunner(terminal);
+          if (run) {
+            await Promise.race([runCommands(run, pick.step.commands), closed(terminal)]);
+          } else {
+            // Without shell integration the end of the commands is unknown; closing ends the fix.
+            for (const cmd of pick.step.commands) terminal.sendText(cmd);
+            fixItem.tooltip = `${pick.step.label} — close the terminal when it finishes`;
+            await closed(terminal);
+          }
+        } finally {
+          fixItem.command = "expoBridge.fix";
+          await recheck();
+        }
       });
-      terminal.show();
-      for (const cmd of pick.step.commands) terminal.sendText(cmd);
     }),
   );
 }
