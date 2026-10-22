@@ -121,7 +121,11 @@ export function activate(context: vscode.ExtensionContext): void {
   const trust = new TrustStore(context.globalState, context.secrets, prompts());
   // The fix re-checks status itself, so it needs the bun version the container last sent.
   let lastContainerBunVersion: string | undefined;
-  const fixItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left);
+  const fixItem = vscode.window.createStatusBarItem(
+    "expoBridge.fixes",
+    vscode.StatusBarAlignment.Left,
+  );
+  fixItem.name = "Expo Bridge";
   fixItem.command = "expoBridge.fix";
   context.subscriptions.push(fixItem);
 

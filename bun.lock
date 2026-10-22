@@ -14,22 +14,26 @@
     },
     "packages/host": {
       "name": "vscode-expo-bridge-host",
-      "version": "0.0.0",
+      "version": "0.1.0",
       "dependencies": {
         "@plume-works/expo-bridge-protocol": "workspace:*",
       },
     },
     "packages/pack": {
       "name": "vscode-expo-bridge",
-      "version": "0.0.0",
+      "version": "0.1.0",
     },
     "packages/protocol": {
       "name": "@plume-works/expo-bridge-protocol",
       "version": "0.0.0",
     },
+    "packages/release": {
+      "name": "@plume-works/expo-bridge-release",
+      "version": "0.0.0",
+    },
     "packages/workspace": {
       "name": "vscode-expo-bridge-workspace",
-      "version": "0.0.0",
+      "version": "0.1.0",
       "dependencies": {
         "@plume-works/expo-bridge-protocol": "workspace:*",
       },
@@ -77,6 +81,8 @@
     "@nodelib/fs.walk": ["@nodelib/fs.walk@1.2.8", "", { "dependencies": { "@nodelib/fs.scandir": "2.1.5", "fastq": "^1.6.0" } }, "sha512-oGB+UxlgWcgQkgwo8GcEGwemoTFt3FIO9ababBmaGwXIoBKZ+GTy0pP185beGg7Llih/NSHSV2XAs1lnznocSg=="],
 
     "@plume-works/expo-bridge-protocol": ["@plume-works/expo-bridge-protocol@workspace:packages/protocol"],
+
+    "@plume-works/expo-bridge-release": ["@plume-works/expo-bridge-release@workspace:packages/release"],
 
     "@secretlint/config-creator": ["@secretlint/config-creator@10.2.2", "", { "dependencies": { "@secretlint/types": "^10.2.2" } }, "sha512-BynOBe7Hn3LJjb3CqCHZjeNB09s/vgf0baBaHVw67w7gHF0d25c3ZsZ5+vv8TgwSchRdUCRrbbcq5i2B1fJ2QQ=="],
 
