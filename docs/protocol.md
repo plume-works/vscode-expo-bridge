@@ -139,13 +139,19 @@ has booted. With no available iOS runtime the action fails with `action-failed`.
 
 ### `launch`
 
-Starts the app `install` last installed in this VS Code session. When its `Info.plist`
-declares an expo-dev-client scheme (`exp+` followed by a plain name), `install` records it
-and `launch` opens the development build at Metro with
-`xcrun simctl openurl <udid> <scheme>://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081`,
-so it loads the bundle over the forwarded port without a tap. Otherwise it runs
-`xcrun simctl launch <udid> <bundle id>`. The URL is fixed by the host; the container
-supplies none of it. Fails with `not-found` when nothing was installed.
+Starts the app `install` last installed in this VS Code session. A development build —
+one whose `Info.plist` declares an expo-dev-client scheme, `exp+` followed by a plain name —
+is restarted with
+
+```
+xcrun simctl launch --terminate-running-process <udid> <bundle id> --initialUrl http://localhost:8081
+```
+
+so expo-dev-client loads the bundle from Metro over the forwarded port without a tap. The
+URL is fixed by the host; the container supplies none of it. Opening the URL through
+`simctl openurl` instead would stop at an iOS "Open in" prompt. Any other app is launched
+with `xcrun simctl launch <udid> <bundle id>`. Fails with `not-found` when nothing was
+installed.
 
 ### `screenshot`
 
