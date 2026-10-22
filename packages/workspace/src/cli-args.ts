@@ -3,6 +3,21 @@ import { ACTIONS, isAction } from "@plume-works/expo-bridge-protocol";
 
 export class UsageError extends Error {}
 
+/**
+ * The container's `bun --version`. The launcher runs this CLI under node, so the runtime's
+ * own version says nothing about the bun that installs the project.
+ */
+export function containerBunVersion(
+  exec: (file: string, args: string[]) => string,
+): string | undefined {
+  try {
+    return exec("bun", ["--version"]).trim() || undefined;
+  } catch {
+    // no bun in the container: status then skips the version comparison
+    return undefined;
+  }
+}
+
 export const USAGE = `usage: eas-host <status|build <profile>|install <path>|launch|screenshot>`;
 
 /**

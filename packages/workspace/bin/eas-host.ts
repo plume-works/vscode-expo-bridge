@@ -1,19 +1,24 @@
 #!/usr/bin/env node
+import { execFileSync } from "node:child_process";
 import * as net from "node:net";
 import { SOCKET_PATH } from "@plume-works/expo-bridge-protocol";
-import { parseArgs, UsageError } from "../src/cli-args";
+import { containerBunVersion, parseArgs, UsageError } from "../src/cli-args";
 import { encodeRequest, LineDecoder, type Frame } from "../src/wire";
 
 /**
  * Run one action over the bridge socket. Exit codes: 0 success, 1 the action failed, 2 a
  * usage error, 3 the bridge is unavailable (no socket, or `status` reports unavailable).
- * The final result prints as JSON on
- * stdout; build log lines stream to stderr so stdout stays a single parseable object.
+ * The final result prints as JSON on stdout; build log lines stream to stderr so stdout
+ * stays a single parseable object.
  */
 async function main(): Promise<number> {
   let request;
   try {
-    request = parseArgs(process.argv.slice(2), process.versions?.bun);
+    const argv = process.argv.slice(2);
+    const bun = argv[0] === "status"
+      ? containerBunVersion((file, args) => execFileSync(file, args, { encoding: "utf8" }))
+      : undefined;
+    request = parseArgs(argv, bun);
   } catch (e) {
     process.stderr.write((e instanceof UsageError ? e.message : String(e)) + "\n");
     return 2;

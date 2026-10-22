@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { parseArgs, UsageError } from "../src/cli-args";
+import { containerBunVersion, parseArgs, UsageError } from "../src/cli-args";
 
 describe("parseArgs", () => {
   test("status, with the container bun version attached", () => {
@@ -31,5 +31,25 @@ describe("parseArgs", () => {
   test("an unknown action is a usage error", () => {
     expect(() => parseArgs(["deploy"])).toThrow(UsageError);
     expect(() => parseArgs([])).toThrow(UsageError);
+  });
+});
+
+describe("containerBunVersion", () => {
+  test("asks the container's bun even when the CLI runs under node", () => {
+    const calls: string[][] = [];
+    const v = containerBunVersion((file, args) => {
+      calls.push([file, ...args]);
+      return "1.4.3\n";
+    });
+    expect(v).toBe("1.4.3");
+    expect(calls).toEqual([["bun", "--version"]]);
+  });
+
+  test("undefined when bun is not installed", () => {
+    expect(
+      containerBunVersion(() => {
+        throw Object.assign(new Error("spawn bun ENOENT"), { code: "ENOENT" });
+      }),
+    ).toBeUndefined();
   });
 });
