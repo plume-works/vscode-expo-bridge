@@ -4,6 +4,8 @@ export interface FixStep {
   /** Which failing status check this fixes. */
   check: keyof StatusResult["checks"];
   label: string;
+  /** Why the check failed, from `status`. */
+  detail?: string;
   /** A guided step opens a URL and waits for the user before the commands run. */
   openUrl?: string;
   /** Shell commands run in a visible local terminal, in order. */
@@ -56,5 +58,15 @@ export function planFixes(status: StatusResult): FixStep[] {
       commands: ["brew install oven-sh/bun/bun"],
     });
   }
-  return steps;
+  return steps.map((s) => ({ ...s, detail: c[s.check].detail }));
+}
+
+/** The status bar text and tooltip for pending fixes; null when there is nothing to fix. */
+export function fixSummary(steps: FixStep[]): { text: string; tooltip: string } | null {
+  if (!steps.length) return null;
+  const n = steps.length;
+  return {
+    text: `$(warning) Expo Bridge: ${n} fix${n === 1 ? "" : "es"}`,
+    tooltip: steps.map((s) => (s.detail ? `${s.label}: ${s.detail}` : s.label)).join("\n"),
+  };
 }

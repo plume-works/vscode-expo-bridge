@@ -6,7 +6,8 @@ import { dispatch, type DispatchDeps } from "./dispatch";
 import { decodeHostPath } from "./hostpath";
 import { captureLoginEnv } from "./env";
 import { realRunner } from "./exec";
-import { planFixes } from "./fix";
+import { fixSummary, planFixes } from "./fix";
+import type { InstalledApp } from "./install";
 import { portAcceptsConnections } from "./port";
 import { status } from "./status";
 import type { Request, StatusResult } from "@plume-works/expo-bridge-protocol";
@@ -14,7 +15,7 @@ import type { Request, StatusResult } from "@plume-works/expo-bridge-protocol";
 /** The ui-side command the workspace extension invokes with a protocol request. */
 const DISPATCH_COMMAND = "expoBridge.ui.dispatch";
 
-let lastBundleId: string | undefined;
+let lastApp: InstalledApp | undefined;
 
 const prompts = (): Prompts => ({
   async trust(hostPath): Promise<TrustDecision | undefined> {
@@ -40,19 +41,16 @@ const prompts = (): Prompts => ({
   },
 });
 
-/** Offer the fix command without blocking the status response; only a click runs a fix. */
-function offerFixes(result: StatusResult): void {
-  if (!result.available) return;
-  const steps = planFixes(result);
-  if (!steps.length) return;
-  void vscode.window
-    .showWarningMessage(
-      `Expo Bridge: missing on this Mac: ${steps.map((s) => s.check).join(", ")}.`,
-      "Fix…",
-    )
-    .then((choice) => {
-      if (choice === "Fix…") void vscode.commands.executeCommand("expoBridge.fix");
-    });
+/** Show pending fixes in a status bar item that lasts until a status has none. */
+function showFixes(item: vscode.StatusBarItem, result: StatusResult): void {
+  const summary = result.available ? fixSummary(planFixes(result)) : null;
+  if (!summary) {
+    item.hide();
+    return;
+  }
+  item.text = summary.text;
+  item.tooltip = summary.tooltip;
+  item.show();
 }
 
 /** The host path of this window's own remote authority — never the container's claim. */
@@ -80,8 +78,8 @@ function buildDispatchDeps(
       env,
       runner: realRunner,
       fileExists,
-      getLastBundleId: () => lastBundleId,
-      setLastBundleId: (id: string) => (lastBundleId = id),
+      getLastApp: () => lastApp,
+      setLastApp: (app: InstalledApp) => (lastApp = app),
       now: Date.now,
     });
 
@@ -123,6 +121,9 @@ export function activate(context: vscode.ExtensionContext): void {
   const trust = new TrustStore(context.globalState, context.secrets, prompts());
   // The fix re-checks status itself, so it needs the bun version the container last sent.
   let lastContainerBunVersion: string | undefined;
+  const fixItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left);
+  fixItem.command = "expoBridge.fix";
+  context.subscriptions.push(fixItem);
 
   context.subscriptions.push(
     vscode.commands.registerCommand(
@@ -132,7 +133,7 @@ export function activate(context: vscode.ExtensionContext): void {
         const make = buildDispatchDeps(trust, globalStorage, request?.containerBunVersion);
         const response = await dispatch(request, await make());
         if (request?.action === "status" && response.ok)
-          offerFixes(response.result as StatusResult);
+          showFixes(fixItem, response.result as StatusResult);
         return response;
       },
     ),
@@ -186,14 +187,15 @@ export function activate(context: vscode.ExtensionContext): void {
       const make = buildDispatchDeps(trust, globalStorage, lastContainerBunVersion);
       const deps = await make();
       const current = await status(await deps.statusDeps({ action: "status" }));
+      showFixes(fixItem, current);
       const steps = planFixes(current);
       if (!steps.length) {
         void vscode.window.showInformationMessage("Expo Bridge: nothing to fix.");
         return;
       }
       const pick = await vscode.window.showQuickPick(
-        steps.map((s) => ({ label: s.label, step: s })),
-        { title: "Expo Bridge: pick a fix to run", canPickMany: false },
+        steps.map((s) => ({ label: s.label, detail: s.detail, step: s })),
+        { title: "Expo Bridge: pick a fix to run", canPickMany: false, ignoreFocusOut: true },
       );
       if (!pick) return;
       if (pick.step.openUrl) {

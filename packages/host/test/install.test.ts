@@ -3,19 +3,27 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import type { ExecResult, Runner } from "../src/exec";
-import { ActionError, install, launch, screenshot, type SimContext } from "../src/install";
+import {
+  ActionError,
+  devClientUrl,
+  install,
+  type InstalledApp,
+  launch,
+  screenshot,
+  type SimContext,
+} from "../src/install";
 
 let hostPath: string;
 let storage: string;
 const BINS = "/opt/homebrew/bin";
 const SIM = "SIM-UDID-1";
-let lastBundleId: string | undefined;
+let lastApp: InstalledApp | undefined;
 
 beforeEach(() => {
   hostPath = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "expo-bridge-install-")));
   storage = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "expo-bridge-store-")));
   fs.mkdirSync(path.join(hostPath, ".tmp", "expo-bridge"), { recursive: true });
-  lastBundleId = undefined;
+  lastApp = undefined;
 });
 
 afterEach(() => {
@@ -36,6 +44,7 @@ function runner(
   captured: Captured[],
   simResult: ExecResult = { code: 0, stdout: "", stderr: "" },
   bundleId = "com.example.myapp",
+  urlTypes: unknown = undefined,
 ): Runner {
   return {
     async run(file, args) {
@@ -52,7 +61,11 @@ function runner(
         return { code: 0, stdout: "", stderr: "" };
       }
       if (file.endsWith("plutil")) {
-        return { code: 0, stdout: JSON.stringify({ CFBundleIdentifier: bundleId }), stderr: "" };
+        return {
+          code: 0,
+          stdout: JSON.stringify({ CFBundleIdentifier: bundleId, CFBundleURLTypes: urlTypes }),
+          stderr: "",
+        };
       }
       if (args[0] === "simctl" && args[1] === "list") {
         const devices = { ios: [{ udid: SIM, name: "iPhone 17", state: "Booted" }] };
@@ -76,8 +89,8 @@ function ctx(partial: Partial<SimContext> = {}): SimContext {
     runner: runner([]),
     fileExists: (p) =>
       p === `${BINS}/xcrun` || p === `${BINS}/tar` || p === `${BINS}/plutil` || fs.existsSync(p),
-    getLastBundleId: () => lastBundleId,
-    setLastBundleId: (id) => (lastBundleId = id),
+    getLastApp: () => lastApp,
+    setLastApp: (app) => (lastApp = app),
     now: () => 1,
     ...partial,
   };
@@ -104,7 +117,7 @@ describe("install", () => {
     const captured: Captured[] = [];
     const r = await install(rel, ctx({ runner: runner(captured) }));
     expect(r.bundleIdentifier).toBe("com.example.myapp");
-    expect(lastBundleId).toBe("com.example.myapp");
+    expect(lastApp).toEqual({ bundleId: "com.example.myapp", devScheme: undefined });
     const simInstall = captured.find((c) => c.args[0] === "simctl" && c.args[1] === "install");
     expect(simInstall?.args.slice(0, 3)).toEqual(["simctl", "install", SIM]);
     const plutil = captured.find((c) => c.file.endsWith("plutil"));
@@ -145,6 +158,23 @@ describe("install", () => {
     }
   });
 
+  test("records the expo-dev-client exp+ scheme for launch", async () => {
+    const rel = writeArtifact();
+    const urlTypes = [
+      { CFBundleURLSchemes: ["myapp", "dev.example.app"] },
+      { CFBundleURLSchemes: ["exp+expo-bridge-spike"] },
+    ];
+    await install(rel, ctx({ runner: runner([], undefined, "com.example.myapp", urlTypes) }));
+    expect(lastApp).toEqual({ bundleId: "com.example.myapp", devScheme: "exp+expo-bridge-spike" });
+  });
+
+  test("ignores an exp+ scheme that is not a plain name", async () => {
+    const rel = writeArtifact();
+    const urlTypes = [{ CFBundleURLSchemes: ["exp+evil://host?x=", "exp+"] }];
+    await install(rel, ctx({ runner: runner([], undefined, "com.example.myapp", urlTypes) }));
+    expect(lastApp?.devScheme).toBeUndefined();
+  });
+
   test("reports a simctl install failure", async () => {
     const rel = writeArtifact();
     try {
@@ -158,12 +188,32 @@ describe("install", () => {
 
 describe("launch", () => {
   test("launches the last-installed bundle id", async () => {
-    lastBundleId = "com.example.myapp";
+    lastApp = { bundleId: "com.example.myapp" };
     const captured: Captured[] = [];
     const r = await launch(ctx({ runner: runner(captured) }));
     expect(r.bundleIdentifier).toBe("com.example.myapp");
     const c = captured.find((x) => x.args[1] === "launch");
     expect(c?.args).toEqual(["simctl", "launch", SIM, "com.example.myapp"]);
+  });
+
+  test("opens a development build at Metro through its exp+ scheme", async () => {
+    lastApp = { bundleId: "com.example.myapp", devScheme: "exp+myapp" };
+    const captured: Captured[] = [];
+    await launch(ctx({ runner: runner(captured) }));
+    const c = captured.find((x) => x.args[1] === "openurl");
+    expect(c?.args).toEqual([
+      "simctl",
+      "openurl",
+      SIM,
+      "exp+myapp://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081",
+    ]);
+    expect(captured.some((x) => x.args[1] === "launch")).toBe(false);
+  });
+
+  test("devClientUrl points at the forwarded Metro port", () => {
+    expect(devClientUrl("exp+a")).toBe(
+      "exp+a://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081",
+    );
   });
 
   test("fails when nothing was installed", async () => {
