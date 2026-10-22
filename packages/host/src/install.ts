@@ -10,6 +10,7 @@ import { WRITE_DIR_REL } from "@plume-works/expo-bridge-protocol";
 import type { Runner } from "./exec";
 import { lookupTool } from "./env";
 import { copyFresh, PathError, requireUnderWriteDir } from "./paths";
+import { ensureBooted, SimulatorError } from "./simulator";
 
 export class ActionError extends Error {
   constructor(readonly error: ProtocolError) {
@@ -35,9 +36,21 @@ function xcrun(ctx: SimContext): string {
   return x;
 }
 
+/** The UDID of the simulator to act on, booting one when none is booted. */
+async function simulator(ctx: SimContext): Promise<string> {
+  const x = xcrun(ctx);
+  try {
+    return await ensureBooted((args) => ctx.runner.run(x, ["simctl", ...args], { env: ctx.env }));
+  } catch (e) {
+    if (e instanceof SimulatorError)
+      throw new ActionError({ code: "action-failed", message: e.message });
+    throw e;
+  }
+}
+
 /**
  * Unpack an artifact from `.tmp/expo-bridge/` into a fresh private directory, rejecting
- * absolute, `..`, and link entries, then install the `.app` on the booted simulator.
+ * absolute, `..`, and link entries, then install the `.app` on the simulator.
  */
 export async function install(artifactRel: string, ctx: SimContext): Promise<InstallResult> {
   let abs: string;
@@ -64,7 +77,8 @@ export async function install(artifactRel: string, ctx: SimContext): Promise<Ins
   if (!appDir) throw new ActionError({ code: "not-found", message: "no .app in the artifact" });
   const bundleId = await bundleIdOf(appDir, ctx);
 
-  const install = await ctx.runner.run(xcrun(ctx), ["simctl", "install", "booted", appDir], {
+  const udid = await simulator(ctx);
+  const install = await ctx.runner.run(xcrun(ctx), ["simctl", "install", udid, appDir], {
     env: ctx.env,
   });
   if (install.code !== 0) {
@@ -78,7 +92,8 @@ export async function install(artifactRel: string, ctx: SimContext): Promise<Ins
 export async function launch(ctx: SimContext): Promise<LaunchResult> {
   const bundleId = ctx.getLastBundleId();
   if (!bundleId) throw new ActionError({ code: "not-found", message: "nothing installed yet" });
-  const r = await ctx.runner.run(xcrun(ctx), ["simctl", "launch", "booted", bundleId], {
+  const udid = await simulator(ctx);
+  const r = await ctx.runner.run(xcrun(ctx), ["simctl", "launch", udid, bundleId], {
     env: ctx.env,
   });
   if (r.code !== 0)
@@ -87,15 +102,16 @@ export async function launch(ctx: SimContext): Promise<LaunchResult> {
 }
 
 /**
- * Capture the booted simulator screen into private storage, then copy it to a fresh PNG
+ * Capture the simulator screen into private storage, then copy it to a fresh PNG
  * under `.tmp/expo-bridge/`, so simctl never writes through a workspace path.
  */
 export async function screenshot(ctx: SimContext): Promise<ScreenshotResult> {
+  const udid = await simulator(ctx);
   const name = `screenshot-${ctx.now()}.png`;
   const privateDir = fs.mkdtempSync(path.join(ctx.globalStorage, "screenshot-"));
   const captured = path.join(privateDir, name);
   try {
-    const r = await ctx.runner.run(xcrun(ctx), ["simctl", "io", "booted", "screenshot", captured], {
+    const r = await ctx.runner.run(xcrun(ctx), ["simctl", "io", udid, "screenshot", captured], {
       env: ctx.env,
     });
     if (r.code !== 0) {

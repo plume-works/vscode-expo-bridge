@@ -41,6 +41,21 @@ function runnerFor(overrides: Record<string, ExecResult> = {}): Runner {
   };
 }
 
+/** The default runner, except that `simctl list devices|runtimes` answer from `listing`. */
+function simctlRunner(listing: { devices: unknown; runtimes: unknown[] }): Runner {
+  const base = runnerFor();
+  return {
+    async run(file, args, opts) {
+      if (file.endsWith("/xcrun") && args[0] === "simctl" && args[1] === "list") {
+        const body =
+          args[2] === "runtimes" ? { runtimes: listing.runtimes } : { devices: listing.devices };
+        return { code: 0, stdout: JSON.stringify(body), stderr: "" };
+      }
+      return base.run(file, args, opts);
+    },
+  };
+}
+
 function deps(partial: Partial<StatusDeps> = {}): StatusDeps {
   const present = new Set(["xcrun", "pod", "fastlane", "node", "bun"].map((t) => `${BINS}/${t}`));
   return {
@@ -125,15 +140,33 @@ describe("checks", () => {
     expect(r.checks.bun.detail).toContain("older");
   });
 
-  test("no booted simulator is reported", async () => {
+  test("no booted simulator passes when one can be booted on demand", async () => {
     const r = await status(
       deps({
-        runner: runnerFor({
-          simctl: { code: 0, stdout: JSON.stringify({ devices: {} }), stderr: "" },
+        runner: simctlRunner({
+          devices: {},
+          runtimes: [
+            {
+              identifier: "ios-26",
+              name: "iOS 26.5",
+              version: "26.5",
+              isAvailable: true,
+              supportedDeviceTypes: [
+                { identifier: "i17", name: "iPhone 17", productFamily: "iPhone" },
+              ],
+            },
+          ],
         }),
       }),
     );
-    expect(r.checks.bootedSimulator.ok).toBe(false);
+    expect(r.checks.simulator.ok).toBe(true);
+    expect(r.checks.simulator.detail).toContain("expo-bridge iPhone 17");
+  });
+
+  test("no iOS simulator runtime fails the simulator check", async () => {
+    const r = await status(deps({ runner: simctlRunner({ devices: {}, runtimes: [] }) }));
+    expect(r.checks.simulator.ok).toBe(false);
+    expect(r.checks.simulator.detail).toContain("no available iOS simulator runtime");
   });
 
   test("missing projectId is reported", async () => {

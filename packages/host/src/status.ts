@@ -1,9 +1,10 @@
 import * as path from "node:path";
-import type { StatusResult } from "@plume-works/expo-bridge-protocol";
+import type { StatusCheck, StatusResult } from "@plume-works/expo-bridge-protocol";
 import { PROTOCOL_VERSION } from "@plume-works/expo-bridge-protocol";
 import type { Runner } from "./exec";
 import { lookupTool } from "./env";
 import { readJsonFile } from "./jsonfile";
+import { planBoot, SimulatorError } from "./simulator";
 
 export interface StatusDeps {
   platform: string;
@@ -66,7 +67,7 @@ export async function status(d: StatusDeps): Promise<StatusResult> {
       bun: { ok: false },
       expoToken: { ok: d.hasToken, detail: d.hasToken ? undefined : "EXPO_TOKEN not set" },
       easProjectId: { ok: false },
-      bootedSimulator: { ok: false },
+      simulator: { ok: false },
       port8081Forwarded: {
         ok: d.port8081Forwarded,
         detail: d.port8081Forwarded ? undefined : "port 8081 is not forwarded",
@@ -108,10 +109,7 @@ export async function status(d: StatusDeps): Promise<StatusResult> {
     ? { ok: true }
     : { ok: false, detail: "extra.eas.projectId not set in app.json" };
 
-  const booted = await bootedSimulator(d);
-  base.checks.bootedSimulator = booted
-    ? { ok: true }
-    : { ok: false, detail: "no booted iOS simulator" };
+  base.checks.simulator = await simulatorCheck(d);
 
   return base;
 }
@@ -127,19 +125,16 @@ function readProjectId(hostPath: string, fileExists: (p: string) => boolean): bo
   }
 }
 
-async function bootedSimulator(d: StatusDeps): Promise<boolean> {
+/** A booted simulator passes, and so does one the bridge can boot on demand. */
+async function simulatorCheck(d: StatusDeps): Promise<StatusCheck> {
   const xcrun = lookupTool("xcrun", d.env, d.fileExists);
-  if (!xcrun) return false;
-  const r = await d.runner.run(xcrun, ["simctl", "list", "devices", "booted", "-j"], {
-    env: d.env,
-  });
-  if (r.code !== 0) return false;
+  if (!xcrun) return { ok: false, detail: "xcrun not found" };
   try {
-    const parsed = JSON.parse(r.stdout) as { devices?: Record<string, unknown[]> };
-    return Object.values(parsed.devices ?? {}).some(
-      (list) => Array.isArray(list) && list.length > 0,
-    );
-  } catch {
-    return false;
+    const plan = await planBoot((args) => d.runner.run(xcrun, ["simctl", ...args], { env: d.env }));
+    if (plan.kind === "booted") return { ok: true };
+    return { ok: true, detail: `none booted; the bridge boots ${plan.name} on demand` };
+  } catch (e) {
+    if (e instanceof SimulatorError) return { ok: false, detail: e.message };
+    throw e;
   }
 }

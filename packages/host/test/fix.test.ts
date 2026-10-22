@@ -21,7 +21,7 @@ function statusWith(
       bun: ok("bun"),
       expoToken: ok("expoToken"),
       easProjectId: ok("easProjectId"),
-      bootedSimulator: ok("bootedSimulator"),
+      simulator: ok("simulator"),
       port8081Forwarded: ok("port8081Forwarded"),
     },
   };
@@ -59,7 +59,7 @@ describe("planFixes", () => {
         workspaceTrusted: false,
         expoToken: false,
         easProjectId: false,
-        bootedSimulator: false,
+        simulator: false,
         port8081Forwarded: false,
       }),
     );
