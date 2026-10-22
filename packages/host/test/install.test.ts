@@ -27,8 +27,15 @@ interface Captured {
   args: string[];
 }
 
-/** A runner that fakes `tar -x` (by writing a .app with Info.plist) and simctl. */
-function runner(captured: Captured[], simResult: ExecResult = { code: 0, stdout: "", stderr: "" }): Runner {
+/**
+ * A runner that fakes `tar -x` (writing a .app whose Info.plist is binary, as a simulator
+ * build's is), `plutil -convert json`, and simctl.
+ */
+function runner(
+  captured: Captured[],
+  simResult: ExecResult = { code: 0, stdout: "", stderr: "" },
+  bundleId = "com.example.myapp",
+): Runner {
   return {
     async run(file, args) {
       captured.push({ file, args: [...args] });
@@ -37,11 +44,15 @@ function runner(captured: Captured[], simResult: ExecResult = { code: 0, stdout:
         const dest = args[destIdx]!;
         const app = path.join(dest, "MyApp.app");
         fs.mkdirSync(app, { recursive: true });
-        fs.writeFileSync(
-          path.join(app, "Info.plist"),
-          `<plist><dict><key>CFBundleIdentifier</key><string>com.example.myapp</string></dict></plist>`,
-        );
+        fs.writeFileSync(path.join(app, "Info.plist"), Buffer.from([0x62, 0x70, 0x6c, 0x69, 0x73, 0x74, 0x30, 0x30, 0xff]));
         return { code: 0, stdout: "", stderr: "" };
+      }
+      if (file.endsWith("plutil")) {
+        return { code: 0, stdout: JSON.stringify({ CFBundleIdentifier: bundleId }), stderr: "" };
+      }
+      if (args[0] === "simctl" && args[1] === "io") {
+        if (simResult.code === 0) fs.writeFileSync(args[4]!, "PNGDATA");
+        return simResult;
       }
       if (args[0] === "simctl") return simResult;
       return { code: 0, stdout: "", stderr: "" };
@@ -55,7 +66,8 @@ function ctx(partial: Partial<SimContext> = {}): SimContext {
     globalStorage: storage,
     env: { PATH: BINS },
     runner: runner([]),
-    fileExists: (p) => p === `${BINS}/xcrun` || p === `${BINS}/tar` || fs.existsSync(p),
+    fileExists: (p) =>
+      p === `${BINS}/xcrun` || p === `${BINS}/tar` || p === `${BINS}/plutil` || fs.existsSync(p),
     getLastBundleId: () => lastBundleId,
     setLastBundleId: (id) => (lastBundleId = id),
     now: () => 1,
@@ -87,6 +99,21 @@ describe("install", () => {
     expect(lastBundleId).toBe("com.example.myapp");
     const simInstall = captured.find((c) => c.args[0] === "simctl" && c.args[1] === "install");
     expect(simInstall?.args.slice(0, 3)).toEqual(["simctl", "install", "booted"]);
+    const plutil = captured.find((c) => c.file.endsWith("plutil"));
+    expect(plutil?.args.slice(0, 4)).toEqual(["-convert", "json", "-o", "-"]);
+    expect(plutil?.args[4]?.startsWith(storage)).toBe(true);
+  });
+
+  test("rejects a bundle identifier that is not a reverse-DNS name", async () => {
+    const rel = writeArtifact();
+    const captured: Captured[] = [];
+    try {
+      await install(rel, ctx({ runner: runner(captured, undefined, "--evil flag") }));
+      throw new Error("should have thrown");
+    } catch (e) {
+      expect((e as ActionError).error.code).toBe("bad-argument");
+    }
+    expect(captured.some((c) => c.args[0] === "simctl")).toBe(false);
   });
 
   test("rejects an artifact that unpacks a symlink", async () => {
@@ -149,5 +176,17 @@ describe("screenshot", () => {
     expect(r.screenshotRel.endsWith(".png")).toBe(true);
     const c = captured.find((x) => x.args[0] === "simctl");
     expect(c?.args.slice(0, 4)).toEqual(["simctl", "io", "booted", "screenshot"]);
+    expect(c?.args[4]?.startsWith(storage)).toBe(true);
+    expect(fs.readFileSync(path.join(hostPath, r.screenshotRel), "utf8")).toBe("PNGDATA");
+  });
+
+  test("a failed capture leaves nothing under .tmp/expo-bridge", async () => {
+    try {
+      await screenshot(ctx({ runner: runner([], { code: 1, stdout: "", stderr: "No devices are booted" }) }));
+      throw new Error("should have thrown");
+    } catch (e) {
+      expect((e as ActionError).error.code).toBe("action-failed");
+    }
+    expect(fs.readdirSync(path.join(hostPath, ".tmp", "expo-bridge"))).toEqual([]);
   });
 });

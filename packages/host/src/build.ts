@@ -5,7 +5,7 @@ import { WRITE_DIR_REL } from "@plume-works/expo-bridge-protocol";
 import type { Runner } from "./exec";
 import { lookupTool } from "./env";
 import { readJsonFile } from "./jsonfile";
-import { openFreshWrite } from "./paths";
+import { copyFresh, openFreshUnique } from "./paths";
 
 export class BuildError extends Error {
   constructor(readonly error: ProtocolError) {
@@ -95,32 +95,4 @@ export async function build(profile: string, d: BuildDeps): Promise<BuildResult>
     logRel: path.relative(d.hostPath, logPath),
     exitCode: r.code,
   };
-}
-
-/**
- * Open a fresh O_EXCL|O_NOFOLLOW_ANY file at `dest`, or at `dest` with a numeric suffix
- * when that name is taken. Returns the fd and the path actually opened.
- */
-export function openFreshUnique(dest: string): { fd: number; written: string } {
-  const ext = path.extname(dest);
-  let target = dest;
-  for (let i = 0; ; i++) {
-    try {
-      return { fd: openFreshWrite(target), written: target };
-    } catch (e) {
-      if ((e as NodeJS.ErrnoException).code !== "EEXIST" || i >= 100) throw e;
-      target = dest.slice(0, dest.length - ext.length) + `-${i}` + ext;
-    }
-  }
-}
-
-/** Copy a file into a fresh destination under the write rule, returning the written path. */
-export function copyFresh(src: string, dest: string): string {
-  const { fd, written } = openFreshUnique(dest);
-  try {
-    fs.writeSync(fd, fs.readFileSync(src));
-  } finally {
-    fs.closeSync(fd);
-  }
-  return written;
 }

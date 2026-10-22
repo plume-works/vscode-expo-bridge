@@ -9,8 +9,7 @@ import type {
 import { WRITE_DIR_REL } from "@plume-works/expo-bridge-protocol";
 import type { Runner } from "./exec";
 import { lookupTool } from "./env";
-import { openFreshWrite, PathError, requireUnderWriteDir } from "./paths";
-import { readJsonFile } from "./jsonfile";
+import { copyFresh, PathError, requireUnderWriteDir } from "./paths";
 
 export class ActionError extends Error {
   constructor(readonly error: ProtocolError) {
@@ -63,7 +62,7 @@ export async function install(artifactRel: string, ctx: SimContext): Promise<Ins
 
   const appDir = findApp(dest);
   if (!appDir) throw new ActionError({ code: "not-found", message: "no .app in the artifact" });
-  const bundleId = bundleIdOf(appDir);
+  const bundleId = await bundleIdOf(appDir, ctx);
 
   const install = await ctx.runner.run(xcrun(ctx), ["simctl", "install", "booted", appDir], {
     env: ctx.env,
@@ -86,20 +85,28 @@ export async function launch(ctx: SimContext): Promise<LaunchResult> {
   return { bundleIdentifier: bundleId };
 }
 
-/** Capture the booted simulator screen to a fresh PNG under `.tmp/expo-bridge/`. */
+/**
+ * Capture the booted simulator screen into private storage, then copy it to a fresh PNG
+ * under `.tmp/expo-bridge/`, so simctl never writes through a workspace path.
+ */
 export async function screenshot(ctx: SimContext): Promise<ScreenshotResult> {
-  const outDir = path.join(ctx.hostPath, WRITE_DIR_REL);
-  fs.mkdirSync(outDir, { recursive: true });
-  const dest = path.join(outDir, `screenshot-${ctx.now()}.png`);
-  const fd = openFreshWrite(dest);
-  fs.closeSync(fd);
-  const r = await ctx.runner.run(xcrun(ctx), ["simctl", "io", "booted", "screenshot", dest], {
-    env: ctx.env,
-  });
-  if (r.code !== 0) {
-    throw new ActionError({ code: "action-failed", message: "simctl screenshot failed" });
+  const name = `screenshot-${ctx.now()}.png`;
+  const privateDir = fs.mkdtempSync(path.join(ctx.globalStorage, "screenshot-"));
+  const captured = path.join(privateDir, name);
+  try {
+    const r = await ctx.runner.run(xcrun(ctx), ["simctl", "io", "booted", "screenshot", captured], {
+      env: ctx.env,
+    });
+    if (r.code !== 0) {
+      throw new ActionError({ code: "action-failed", message: "simctl screenshot failed" });
+    }
+    const outDir = path.join(ctx.hostPath, WRITE_DIR_REL);
+    fs.mkdirSync(outDir, { recursive: true });
+    const dest = copyFresh(captured, path.join(outDir, name));
+    return { screenshotRel: path.relative(ctx.hostPath, dest) };
+  } finally {
+    fs.rmSync(privateDir, { recursive: true, force: true });
   }
-  return { screenshotRel: path.relative(ctx.hostPath, dest) };
 }
 
 function rejectSymlinks(root: string): void {
@@ -119,17 +126,25 @@ function findApp(root: string): string | null {
   return null;
 }
 
-function bundleIdOf(appDir: string): string {
+const BUNDLE_ID_RE = /^[A-Za-z0-9][A-Za-z0-9.-]*$/;
+
+/** Read `CFBundleIdentifier` through `plutil`, since a simulator build's Info.plist is binary. */
+async function bundleIdOf(appDir: string, ctx: SimContext): Promise<string> {
+  const plutil = lookupTool("plutil", ctx.env, ctx.fileExists) ?? "/usr/bin/plutil";
   const plist = path.join(appDir, "Info.plist");
-  // Info.plist may be binary; prefer a JSON view when a converter exists, else parse XML.
+  const r = await ctx.runner.run(plutil, ["-convert", "json", "-o", "-", plist], { env: ctx.env });
+  if (r.code !== 0) throw new ActionError({ code: "action-failed", message: "Info.plist is unreadable" });
+  let id: unknown;
   try {
-    const parsed = readJsonFile(plist) as { CFBundleIdentifier?: string };
-    if (typeof parsed.CFBundleIdentifier === "string") return parsed.CFBundleIdentifier;
+    id = (JSON.parse(r.stdout) as { CFBundleIdentifier?: unknown }).CFBundleIdentifier;
   } catch {
-    // not JSON — fall through to the XML scan
+    throw new ActionError({ code: "action-failed", message: "Info.plist is unreadable" });
   }
-  const xml = fs.readFileSync(plist, "utf8");
-  const m = xml.match(/<key>CFBundleIdentifier<\/key>\s*<string>([^<]+)<\/string>/);
-  if (!m) throw new ActionError({ code: "not-found", message: "CFBundleIdentifier not found" });
-  return m[1]!;
+  if (typeof id !== "string") {
+    throw new ActionError({ code: "not-found", message: "CFBundleIdentifier not found" });
+  }
+  if (!BUNDLE_ID_RE.test(id)) {
+    throw new ActionError({ code: "bad-argument", message: "CFBundleIdentifier is not a bundle id" });
+  }
+  return id;
 }
