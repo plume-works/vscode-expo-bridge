@@ -27,6 +27,9 @@ export interface InstalledApp {
 /** Where Metro is reached from the simulator: the forwarded port on the Mac. */
 export const METRO_URL = "http://localhost:8081";
 
+/** UserDefaults overrides that keep expo-dev-menu's introduction and menu off the screen. */
+const DEV_MENU_QUIET = ["-EXDevMenuIsOnboardingFinished", "YES", "-EXDevMenuShowsAtLaunch", "NO"];
+
 export interface SimContext {
   hostPath: string;
   globalStorage: string;
@@ -108,7 +111,7 @@ export async function launch(ctx: SimContext): Promise<LaunchResult> {
   const args = app.devScheme
     ? ["simctl", "launch", "--terminate-running-process", udid, app.bundleId]
     : ["simctl", "launch", udid, app.bundleId];
-  if (app.devScheme) args.push("--initialUrl", METRO_URL);
+  if (app.devScheme) args.push("--initialUrl", METRO_URL, ...DEV_MENU_QUIET);
   const r = await ctx.runner.run(xcrun(ctx), args, { env: ctx.env });
   if (r.code !== 0)
     throw new ActionError({ code: "action-failed", message: "simctl launch failed" });

@@ -144,10 +144,12 @@ one whose `Info.plist` declares an expo-dev-client scheme, `exp+` followed by a 
 is restarted with
 
 ```
-xcrun simctl launch --terminate-running-process <udid> <bundle id> --initialUrl http://localhost:8081
+xcrun simctl launch --terminate-running-process <udid> <bundle id> --initialUrl http://localhost:8081 \
+  -EXDevMenuIsOnboardingFinished YES -EXDevMenuShowsAtLaunch NO
 ```
 
-so expo-dev-client loads the bundle from Metro over the forwarded port without a tap. The
+so expo-dev-client loads the bundle from Metro over the forwarded port without a tap, and
+neither expo-dev-menu's introduction nor the menu covers the app. The
 URL is fixed by the host; the container supplies none of it. Opening the URL through
 `simctl openurl` instead would stop at an iOS "Open in" prompt. Any other app is launched
 with `xcrun simctl launch <udid> <bundle id>`. Fails with `not-found` when nothing was
