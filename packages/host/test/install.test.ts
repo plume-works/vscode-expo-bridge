@@ -195,7 +195,7 @@ describe("launch", () => {
     expect(c?.args).toEqual(["simctl", "launch", SIM, "com.example.myapp"]);
   });
 
-  test("restarts a development build with --initialUrl pointing at Metro", async () => {
+  test("restarts a development build at Metro with the dev menu kept closed", async () => {
     lastApp = { bundleId: "com.example.myapp", devScheme: "exp+myapp" };
     const captured: Captured[] = [];
     await launch(ctx({ runner: runner(captured) }));
@@ -208,6 +208,10 @@ describe("launch", () => {
       "com.example.myapp",
       "--initialUrl",
       "http://localhost:8081",
+      "-EXDevMenuIsOnboardingFinished",
+      "YES",
+      "-EXDevMenuShowsAtLaunch",
+      "NO",
     ]);
     expect(captured.some((x) => x.args[1] === "openurl")).toBe(false);
   });
