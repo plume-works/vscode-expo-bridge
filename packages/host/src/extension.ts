@@ -9,7 +9,7 @@ import { realRunner } from "./exec";
 import { planFixes } from "./fix";
 import { portAcceptsConnections } from "./port";
 import { status } from "./status";
-import type { Request } from "@plume-works/expo-bridge-protocol";
+import type { Request, StatusResult } from "@plume-works/expo-bridge-protocol";
 
 /** The ui-side command the workspace extension invokes with a protocol request. */
 const DISPATCH_COMMAND = "expoBridge.ui.dispatch";
@@ -39,6 +39,18 @@ const prompts = (): Prompts => ({
     return "decline";
   },
 });
+
+/** Offer the fix command without blocking the status response; only a click runs a fix. */
+function offerFixes(result: StatusResult): void {
+  if (!result.available) return;
+  const steps = planFixes(result);
+  if (!steps.length) return;
+  void vscode.window
+    .showWarningMessage(`Expo Bridge: missing on this Mac: ${steps.map((s) => s.check).join(", ")}.`, "Fix…")
+    .then((choice) => {
+      if (choice === "Fix…") void vscode.commands.executeCommand("expoBridge.fix");
+    });
+}
 
 /** The host path of this window's own remote authority — never the container's claim. */
 function resolveHostPath(): string | null {
@@ -110,7 +122,9 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     vscode.commands.registerCommand(DISPATCH_COMMAND, async (request: Request & { containerBunVersion?: string }) => {
       const make = buildDispatchDeps(trust, globalStorage, request?.containerBunVersion);
-      return dispatch(request, await make());
+      const response = await dispatch(request, await make());
+      if (request?.action === "status" && response.ok) offerFixes(response.result as StatusResult);
+      return response;
     }),
 
     vscode.commands.registerCommand("expoBridge.setToken", async () => {

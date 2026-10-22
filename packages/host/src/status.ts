@@ -73,10 +73,10 @@ export async function status(d: StatusDeps): Promise<StatusResult> {
 
   if (!available) return base;
 
-  const xcodeSelect = lookupTool("xcrun", d.env, d.fileExists);
-  base.checks.xcode = xcodeSelect
+  // xcrun ships with the Command Line Tools too; only a full Xcode runs xcodebuild.
+  base.checks.xcode = (await toolVersion(d, "xcrun", ["xcodebuild", "-version"]))
     ? { ok: true }
-    : { ok: false, detail: "Xcode command-line tools not found" };
+    : { ok: false, detail: "Xcode not found or not selected" };
 
   base.checks.cocoapods = lookupTool("pod", d.env, d.fileExists)
     ? { ok: true }

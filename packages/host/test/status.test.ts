@@ -28,6 +28,9 @@ function runnerFor(overrides: Record<string, ExecResult> = {}): Runner {
       if (file.endsWith("/node")) return defaults.node;
       if (file.endsWith("/bun")) return overrides.bun ?? defaults.bun;
       if (file.endsWith("/xcrun") && args[0] === "simctl") return overrides.simctl ?? defaults["simctl list"];
+      if (file.endsWith("/xcrun") && args[0] === "xcodebuild") {
+        return overrides.xcodebuild ?? { code: 0, stdout: "Xcode 26.0", stderr: "" };
+      }
       return { code: 0, stdout: "", stderr: "" };
     },
   };
@@ -85,6 +88,17 @@ describe("checks", () => {
     for (const [name, c] of Object.entries(r.checks)) {
       expect(c.ok, `${name} should be ok`).toBe(true);
     }
+  });
+
+  test("Command Line Tools without Xcode fail the Xcode check", async () => {
+    const r = await status(
+      deps({
+        runner: runnerFor({
+          xcodebuild: { code: 1, stdout: "", stderr: "xcode-select: error: tool 'xcodebuild' requires Xcode" },
+        }),
+      }),
+    );
+    expect(r.checks.xcode.ok).toBe(false);
   });
 
   test("each tool absence is reported", async () => {
