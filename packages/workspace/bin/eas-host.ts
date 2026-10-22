@@ -1,13 +1,14 @@
 #!/usr/bin/env node
 import { execFileSync } from "node:child_process";
 import * as net from "node:net";
-import { SOCKET_PATH } from "@plume-works/expo-bridge-protocol";
+import { PROTOCOL_VERSION, SOCKET_PATH, type StatusResult } from "@plume-works/expo-bridge-protocol";
 import { containerBunVersion, parseArgs, UsageError } from "../src/cli-args";
 import { encodeRequest, LineDecoder, type Frame } from "../src/wire";
 
 /**
  * Run one action over the bridge socket. Exit codes: 0 success, 1 the action failed, 2 a
- * usage error, 3 the bridge is unavailable (no socket, or `status` reports unavailable).
+ * usage error, 3 the bridge is unavailable (no socket, or `status` reports unavailable or
+ * another protocol version).
  * The final result prints as JSON on stdout; build log lines stream to stderr so stdout
  * stays a single parseable object.
  */
@@ -45,8 +46,7 @@ async function main(): Promise<number> {
           const r = frame.response;
           if (r.ok) {
             process.stdout.write(JSON.stringify(r.result) + "\n");
-            const unavailable = request.action === "status" && (r.result as { available?: boolean }).available === false;
-            done(unavailable ? 3 : 0);
+            done(request.action === "status" ? statusExit(r.result as StatusResult) : 0);
           } else {
             process.stdout.write(JSON.stringify(r.error) + "\n");
             done(r.error.code === "unavailable" ? 3 : 1);
@@ -65,6 +65,18 @@ async function main(): Promise<number> {
     });
     socket.on("close", () => done(1));
   });
+}
+
+/** A host on another protocol version cannot serve this CLI, so it counts as unavailable. */
+function statusExit(result: StatusResult): number {
+  if (result.protocolVersion !== PROTOCOL_VERSION) {
+    process.stderr.write(
+      `expo bridge protocol version mismatch: host ${result.protocolVersion}, ` +
+        `eas-host ${PROTOCOL_VERSION}; update the Expo Bridge extensions\n`,
+    );
+    return 3;
+  }
+  return result.available ? 0 : 3;
 }
 
 main().then((code) => process.exit(code));

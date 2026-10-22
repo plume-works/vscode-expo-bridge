@@ -81,6 +81,17 @@ describe("eas-host CLI", () => {
       expect(JSON.parse(r.stdout).available).toBe(false);
     });
 
+    test("a status from a host on another protocol version exits 3 and names both", async () => {
+      onRequest = (_req, conn) => {
+        conn.write(encodeFrame({ kind: "response", response: { ok: true, result: { protocolVersion: 999, available: true, checks: {} as never } } }));
+        conn.end();
+      };
+      const r = await runCli(["status"]);
+      expect(r.code).toBe(3);
+      expect(r.stderr).toContain("protocol version mismatch");
+      expect(r.stderr).toContain("999");
+    });
+
     test("an unavailable error exits 3", async () => {
       onRequest = (_req, conn) => {
         conn.write(encodeFrame({ kind: "response", response: { ok: false, error: { code: "unavailable", message: "x" } } }));
