@@ -218,6 +218,9 @@ When `status` finds a tool the one-click fix can install, the host extension sho
 bar item in the Mac window naming the number of fixes, with each failing check's detail in
 its tooltip. It stays until a later `status` finds nothing to fix. Clicking it, or running
 **Expo Bridge: Fix Missing Tools**, opens a picker that stays open when focus moves; only
-picking a fix there starts one: Homebrew installs in a visible local terminal, and for Xcode
-the App Store page followed by `xcode-select`, the license acceptance, and
-`xcodebuild -downloadPlatform iOS`. No protocol action can start a fix.
+picking a fix there starts one, and only one runs at a time: Homebrew installs in a visible
+local terminal, and for Xcode the App Store page followed by `xcode-select`, the license
+acceptance, and `xcodebuild -downloadPlatform iOS`. While a fix runs, the status bar item
+shows it running and offers nothing to click; when its commands finish, or its terminal
+closes, the host re-runs `status` and the item clears or shows what still fails. No protocol
+action can start a fix.

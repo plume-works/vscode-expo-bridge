@@ -3,14 +3,14 @@
   "displayName": "Expo Bridge (Workspace)",
   "description": "Container-side half of the Expo Bridge: installs the eas-host command and bridges it to the Mac host.",
   "publisher": "plume-works",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/plume-works/vscode-expo-bridge.git"
   },
   "engines": {
-    "vscode": "^1.90.0"
+    "vscode": "^1.93.0"
   },
   "categories": [
     "Other"
