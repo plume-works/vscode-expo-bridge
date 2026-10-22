@@ -6,7 +6,8 @@ import { encodeRequest, LineDecoder, type Frame } from "../src/wire";
 
 /**
  * Run one action over the bridge socket. Exit codes: 0 success, 1 the action failed, 2 a
- * usage error, 3 the bridge is unavailable (no socket). The final result prints as JSON on
+ * usage error, 3 the bridge is unavailable (no socket, or `status` reports unavailable).
+ * The final result prints as JSON on
  * stdout; build log lines stream to stderr so stdout stays a single parseable object.
  */
 async function main(): Promise<number> {
@@ -39,7 +40,8 @@ async function main(): Promise<number> {
           const r = frame.response;
           if (r.ok) {
             process.stdout.write(JSON.stringify(r.result) + "\n");
-            done(0);
+            const unavailable = request.action === "status" && (r.result as { available?: boolean }).available === false;
+            done(unavailable ? 3 : 0);
           } else {
             process.stdout.write(JSON.stringify(r.error) + "\n");
             done(r.error.code === "unavailable" ? 3 : 1);

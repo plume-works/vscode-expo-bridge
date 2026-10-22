@@ -7,6 +7,7 @@ import { decodeHostPath } from "./hostpath";
 import { captureLoginEnv } from "./env";
 import { realRunner } from "./exec";
 import { planFixes } from "./fix";
+import { portAcceptsConnections } from "./port";
 import { status } from "./status";
 import type { Request } from "@plume-works/expo-bridge-protocol";
 
@@ -81,7 +82,7 @@ function buildDispatchDeps(
         env,
         runner: realRunner,
         fileExists,
-        port8081Forwarded: false,
+        port8081Forwarded: await portAcceptsConnections(8081, 500),
       }),
       confirmBuild: async (profile: string) =>
         hostPath ? trust.confirmBuild(hostPath, profile) : false,
@@ -137,14 +138,16 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
 
     vscode.commands.registerCommand("expoBridge.manageTrust", async () => {
-      const trusted = trust.listTrusted();
+      const decisions = trust.listDecisions();
       const pick = await vscode.window.showQuickPick(
-        trusted.length ? trusted.map((p) => ({ label: p })) : [{ label: "No trusted workspaces" }],
-        { title: "Revoke a trusted workspace", canPickMany: false },
+        decisions.length
+          ? decisions.map((d) => ({ label: d.hostPath, description: d.decision === "allow" ? "trusted" : "declined" }))
+          : [{ label: "No recorded workspaces", description: "" }],
+        { title: "Revoke a workspace's trust decision", canPickMany: false },
       );
-      if (pick && trusted.includes(pick.label)) {
+      if (pick && decisions.some((d) => d.hostPath === pick.label)) {
         const yes = await vscode.window.showWarningMessage(
-          `Revoke trust for ${pick.label}?`,
+          `Revoke the ${pick.description} decision for ${pick.label}? Its next request will ask again.`,
           { modal: true },
           "Revoke",
         );

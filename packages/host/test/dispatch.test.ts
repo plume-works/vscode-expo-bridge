@@ -101,11 +101,45 @@ describe("dispatch", () => {
     if (!r.ok) expect(r.error.code).toBe("bad-request");
   });
 
-  test("status is served without trust and reports the protocol version", async () => {
+  test("status on a trusted workspace never prompts and reports the protocol version", async () => {
     let trustCalled = false;
     const r = await dispatch({ action: "status" }, deps({ ensureTrusted: async () => (trustCalled = true, true) }));
     expect(r.ok).toBe(true);
     if (r.ok) expect((r.result as { protocolVersion: number }).protocolVersion).toBe(PROTOCOL_VERSION);
+    expect(trustCalled).toBe(false);
+  });
+
+  test("status on an untrusted workspace asks for trust and reports the answer", async () => {
+    const base = deps();
+    for (const answer of [true, false]) {
+      let trustCalled = false;
+      const r = await dispatch(
+        { action: "status" },
+        {
+          ...base,
+          statusDeps: async (req) => ({ ...(await base.statusDeps(req)), trusted: false }),
+          ensureTrusted: async () => ((trustCalled = true), answer),
+        },
+      );
+      expect(trustCalled).toBe(true);
+      expect(r.ok).toBe(true);
+      if (r.ok) {
+        expect((r.result as { checks: { workspaceTrusted: { ok: boolean } } }).checks.workspaceTrusted.ok).toBe(answer);
+      }
+    }
+  });
+
+  test("status never asks for trust when the bridge is unavailable", async () => {
+    const base = deps();
+    let trustCalled = false;
+    await dispatch(
+      { action: "status" },
+      {
+        ...base,
+        statusDeps: async (req) => ({ ...(await base.statusDeps(req)), platform: "linux", trusted: false }),
+        ensureTrusted: async () => ((trustCalled = true), true),
+      },
+    );
     expect(trustCalled).toBe(false);
   });
 

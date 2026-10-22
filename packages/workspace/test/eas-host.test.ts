@@ -71,6 +71,16 @@ describe("eas-host CLI", () => {
       expect(JSON.parse(r.stdout).available).toBe(true);
     });
 
+    test("a status result with available false prints it and exits 3", async () => {
+      onRequest = (_req, conn) => {
+        conn.write(encodeFrame({ kind: "response", response: { ok: true, result: { protocolVersion: 1, available: false, checks: {} as never } } }));
+        conn.end();
+      };
+      const r = await runCli(["status"]);
+      expect(r.code).toBe(3);
+      expect(JSON.parse(r.stdout).available).toBe(false);
+    });
+
     test("an unavailable error exits 3", async () => {
       onRequest = (_req, conn) => {
         conn.write(encodeFrame({ kind: "response", response: { ok: false, error: { code: "unavailable", message: "x" } } }));

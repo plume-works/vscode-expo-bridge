@@ -37,7 +37,12 @@ export async function dispatch(request: unknown, deps: DispatchDeps): Promise<Re
 
   try {
     if (req.action === "status") {
-      return ok(await status(await deps.statusDeps(req)));
+      const sd = await deps.statusDeps(req);
+      // The first request from a workspace asks for trust, and status is usually first.
+      if (sd.platform === "darwin" && sd.hostPathExists && !sd.trusted) {
+        sd.trusted = await deps.ensureTrusted();
+      }
+      return ok(await status(sd));
     }
 
     if (deps.hostPath === null) {

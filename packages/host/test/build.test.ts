@@ -116,6 +116,24 @@ describe("invocation", () => {
     expect(fs.readFileSync(path.join(hostPath, r.artifactRel), "utf8")).toBe("ARTIFACT");
   });
 
+  test("writes the log under .tmp/expo-bridge while eas is still running", async () => {
+    const seenMidBuild: string[] = [];
+    const runner: Runner = {
+      async run(_file, _args, opts) {
+        opts?.onOutput?.("step one\n");
+        const dir = path.join(hostPath, ".tmp", "expo-bridge");
+        for (const f of fs.readdirSync(dir).filter((n) => n.endsWith(".log"))) {
+          seenMidBuild.push(fs.readFileSync(path.join(dir, f), "utf8"));
+        }
+        opts?.onOutput?.("step two\n");
+        return { code: 0, stdout: "step one\nstep two\n", stderr: "" };
+      },
+    };
+    const r = await build("development", deps({ runner }));
+    expect(seenMidBuild).toEqual(["step one\n"]);
+    expect(fs.readFileSync(path.join(hostPath, r.logRel), "utf8")).toBe("step one\nstep two\n");
+  });
+
   test("reports a non-zero exit code", async () => {
     const r = await build(
       "development",

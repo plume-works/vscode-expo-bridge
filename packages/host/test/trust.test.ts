@@ -66,6 +66,22 @@ describe("trust", () => {
     expect(store.listTrusted()).toEqual([]);
   });
 
+  test("listDecisions includes declined workspaces so they can be revoked", async () => {
+    let answer: TrustDecision = "allow";
+    const p: Prompts = { trust: async () => answer, build: async () => "once" };
+    const store = new TrustStore(state, secrets, p, () => clock);
+    await store.ensureTrusted(HOST);
+    answer = "decline";
+    await store.ensureTrusted(OTHER);
+    expect(store.listDecisions()).toEqual([
+      { hostPath: HOST, decision: "allow" },
+      { hostPath: OTHER, decision: "decline" },
+    ]);
+    await store.revoke(OTHER);
+    answer = "allow";
+    expect(await store.ensureTrusted(OTHER)).toBe(true);
+  });
+
   test("a dismissed prompt (undefined) is treated as decline", async () => {
     const store = new TrustStore(state, secrets, prompts(undefined, "once"), () => clock);
     expect(await store.ensureTrusted(HOST)).toBe(false);

@@ -69,19 +69,21 @@ export async function build(profile: string, d: BuildDeps): Promise<BuildResult>
   };
   if (d.token) env.EXPO_TOKEN = d.token;
 
-  const logPath = path.join(buildDir, "build.log");
-  const r = await d.runner.run(
-    eas,
-    ["build", "--local", "--non-interactive", "-p", "ios", "--profile", profile],
-    { env, cwd: d.hostPath },
-  );
-  fs.writeFileSync(logPath, r.stdout + r.stderr);
-
   const outDir = path.join(d.hostPath, WRITE_DIR_REL);
   fs.mkdirSync(outDir, { recursive: true });
+  const { fd: logFd, written: logPath } = openFreshUnique(path.join(outDir, `build-${d.now()}.log`));
+  let r;
+  try {
+    r = await d.runner.run(
+      eas,
+      ["build", "--local", "--non-interactive", "-p", "ios", "--profile", profile],
+      { env, cwd: d.hostPath, onOutput: (chunk) => fs.writeSync(logFd, chunk) },
+    );
+  } finally {
+    fs.closeSync(logFd);
+  }
 
-  const artifact = fs.readdirSync(buildDir).find((f) => f !== "build.log" && !f.startsWith("."));
-  const copiedLog = copyFresh(logPath, path.join(outDir, `build-${d.now()}.log`));
+  const artifact = fs.readdirSync(buildDir).find((f) => !f.startsWith("."));
   let artifactRel = "";
   if (artifact) {
     const dest = copyFresh(path.join(buildDir, artifact), path.join(outDir, artifact));
@@ -90,30 +92,35 @@ export async function build(profile: string, d: BuildDeps): Promise<BuildResult>
 
   return {
     artifactRel,
-    logRel: path.relative(d.hostPath, copiedLog),
+    logRel: path.relative(d.hostPath, logPath),
     exitCode: r.code,
   };
 }
 
-/** Copy a file into a fresh O_EXCL|O_NOFOLLOW destination, returning the written path. */
-function copyFresh(src: string, dest: string): string {
+/**
+ * Open a fresh O_EXCL|O_NOFOLLOW_ANY file at `dest`, or at `dest` with a numeric suffix
+ * when that name is taken. Returns the fd and the path actually opened.
+ */
+export function openFreshUnique(dest: string): { fd: number; written: string } {
+  const ext = path.extname(dest);
   let target = dest;
   for (let i = 0; ; i++) {
     try {
-      const fd = openFreshWrite(target);
-      try {
-        fs.writeSync(fd, fs.readFileSync(src));
-      } finally {
-        fs.closeSync(fd);
-      }
-      return target;
+      return { fd: openFreshWrite(target), written: target };
     } catch (e) {
-      if ((e as NodeJS.ErrnoException).code === "EEXIST" && i < 100) {
-        const ext = path.extname(dest);
-        target = dest.slice(0, dest.length - ext.length) + `-${i}` + ext;
-        continue;
-      }
-      throw e;
+      if ((e as NodeJS.ErrnoException).code !== "EEXIST" || i >= 100) throw e;
+      target = dest.slice(0, dest.length - ext.length) + `-${i}` + ext;
     }
   }
+}
+
+/** Copy a file into a fresh destination under the write rule, returning the written path. */
+export function copyFresh(src: string, dest: string): string {
+  const { fd, written } = openFreshUnique(dest);
+  try {
+    fs.writeSync(fd, fs.readFileSync(src));
+  } finally {
+    fs.closeSync(fd);
+  }
+  return written;
 }

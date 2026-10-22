@@ -53,6 +53,11 @@ export class TrustStore {
       .map(([hostPath]) => hostPath);
   }
 
+  /** Every recorded decision, allowed and declined, for the manage-trust command. */
+  listDecisions(): { hostPath: string; decision: TrustDecision }[] {
+    return Object.entries(this.trustMap()).map(([hostPath, decision]) => ({ hostPath, decision }));
+  }
+
   async revoke(hostPath: string): Promise<void> {
     const map = this.trustMap();
     delete map[hostPath];
