@@ -37,7 +37,7 @@ const okRunner: Runner = {
         `<plist><dict><key>CFBundleIdentifier</key><string>com.a</string></dict></plist>`,
       );
     }
-    if (a[0] === "eas" || file.endsWith("/eas")) {
+    if (file.endsWith("/bun") && a[1]?.startsWith("eas-cli@")) {
       const out = process.env.EAS_LOCAL_BUILD_ARTIFACTS_DIR;
       if (out) fs.writeFileSync(path.join(out, "a.tar.gz"), "X");
     }
@@ -47,7 +47,7 @@ const okRunner: Runner = {
 
 function deps(partial: Partial<DispatchDeps> = {}): DispatchDeps {
   const fileExists = (p: string) =>
-    p === `${BINS}/xcrun` || p === `${BINS}/tar` || p === `${BINS}/eas` || fs.existsSync(p);
+    p === `${BINS}/xcrun` || p === `${BINS}/tar` || p === `${BINS}/bun` || fs.existsSync(p);
   const simContext = () => ({
     hostPath,
     globalStorage: storage,

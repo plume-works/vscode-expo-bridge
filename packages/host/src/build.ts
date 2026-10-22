@@ -3,6 +3,7 @@ import * as path from "node:path";
 import type { BuildResult, ProtocolError } from "@plume-works/expo-bridge-protocol";
 import { WRITE_DIR_REL } from "@plume-works/expo-bridge-protocol";
 import type { Runner } from "./exec";
+import { EasCliError, easCliSpec } from "./eascli";
 import { lookupTool } from "./env";
 import { readJsonFile } from "./jsonfile";
 import { copyFresh, openFreshUnique } from "./paths";
@@ -35,10 +36,10 @@ export function profilesOf(easJson: unknown): string[] {
 }
 
 /**
- * Run `eas build --local` for a simulator profile and leave the artifact and log under
- * `.tmp/expo-bridge/`. Validates the profile against `eas.json`, never runs `eas init`,
- * and builds into private global storage before copying into the workspace under the
- * fresh-write rule. The caller has already gated trust and the confirmation.
+ * Run `eas build --local` through `bunx eas-cli@<spec>` for a simulator profile and leave
+ * the artifact and log under `.tmp/expo-bridge/`. Validates the profile against
+ * `eas.json`, never runs `eas init`, and builds into private global storage before copying
+ * into the workspace under the fresh-write rule. The caller has already gated trust and the confirmation.
  */
 export async function build(profile: string, d: BuildDeps): Promise<BuildResult> {
   if (!d.confirmed)
@@ -56,8 +57,16 @@ export async function build(profile: string, d: BuildDeps): Promise<BuildResult>
     throw new BuildError({ code: "not-found", message: "profile not found in eas.json" });
   }
 
-  const eas = lookupTool("eas", d.env, d.fileExists) ?? lookupTool("eas-cli", d.env, d.fileExists);
-  if (!eas) throw new BuildError({ code: "action-failed", message: "eas-cli not found" });
+  const bun = lookupTool("bun", d.env, d.fileExists);
+  if (!bun) throw new BuildError({ code: "action-failed", message: "bun not found" });
+  let spec: string;
+  try {
+    spec = easCliSpec(d.hostPath, d.fileExists);
+  } catch (e) {
+    if (e instanceof EasCliError)
+      throw new BuildError({ code: "bad-argument", message: e.message });
+    throw e;
+  }
 
   const buildDir = path.join(d.globalStorage, `build-${d.now()}`);
   fs.mkdirSync(buildDir, { recursive: true });
@@ -78,8 +87,18 @@ export async function build(profile: string, d: BuildDeps): Promise<BuildResult>
   let r;
   try {
     r = await d.runner.run(
-      eas,
-      ["build", "--local", "--non-interactive", "-p", "ios", "--profile", profile],
+      bun,
+      [
+        "x",
+        `eas-cli@${spec}`,
+        "build",
+        "--local",
+        "--non-interactive",
+        "-p",
+        "ios",
+        "--profile",
+        profile,
+      ],
       { env, cwd: d.hostPath, onOutput: (chunk) => fs.writeSync(logFd, chunk) },
     );
   } finally {
