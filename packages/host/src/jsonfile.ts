@@ -45,7 +45,10 @@ export function readJsonFile(absPath: string, deps: JsonFileDeps = defaultDeps):
 
   // O_NONBLOCK so opening a FIFO fails fast via fstat instead of blocking for a writer;
   // O_NOFOLLOW so a symlink swapped in after lstat still fails the open.
-  const fd = deps.open(absPath, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK);
+  const fd = deps.open(
+    absPath,
+    fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK,
+  );
   try {
     const fst = deps.fstat(fd);
     if (!fst.isFile()) throw new JsonFileError("not-regular", "file is not a regular file");

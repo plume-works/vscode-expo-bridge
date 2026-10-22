@@ -12,16 +12,34 @@
   "engines": {
     "vscode": "^1.90.0"
   },
-  "categories": ["Other"],
-  "extensionKind": ["ui"],
+  "categories": [
+    "Other"
+  ],
+  "extensionKind": [
+    "ui"
+  ],
   "main": "./dist/extension.js",
-  "activationEvents": ["onStartupFinished"],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
   "contributes": {
     "commands": [
-      { "command": "expoBridge.setToken", "title": "Expo Bridge: Set EXPO_TOKEN" },
-      { "command": "expoBridge.clearToken", "title": "Expo Bridge: Clear EXPO_TOKEN" },
-      { "command": "expoBridge.manageTrust", "title": "Expo Bridge: Manage Trusted Workspaces" },
-      { "command": "expoBridge.fix", "title": "Expo Bridge: Fix Missing Tools" }
+      {
+        "command": "expoBridge.setToken",
+        "title": "Expo Bridge: Set EXPO_TOKEN"
+      },
+      {
+        "command": "expoBridge.clearToken",
+        "title": "Expo Bridge: Clear EXPO_TOKEN"
+      },
+      {
+        "command": "expoBridge.manageTrust",
+        "title": "Expo Bridge: Manage Trusted Workspaces"
+      },
+      {
+        "command": "expoBridge.fix",
+        "title": "Expo Bridge: Fix Missing Tools"
+      }
     ]
   },
   "scripts": {

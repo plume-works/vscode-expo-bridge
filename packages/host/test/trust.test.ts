@@ -127,10 +127,15 @@ describe("build confirmation", () => {
     const store = new TrustStore(state, secrets, p, () => clock);
     await store.confirmBuild(HOST, "development");
     let otherPrompted = false;
-    const store2 = new TrustStore(state, secrets, {
-      trust: async () => "allow",
-      build: async () => ((otherPrompted = true), "once"),
-    }, () => clock);
+    const store2 = new TrustStore(
+      state,
+      secrets,
+      {
+        trust: async () => "allow",
+        build: async () => ((otherPrompted = true), "once"),
+      },
+      () => clock,
+    );
     await store2.confirmBuild(OTHER, "development");
     expect(otherPrompted).toBe(true);
   });

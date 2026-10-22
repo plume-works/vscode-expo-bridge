@@ -1,9 +1,7 @@
 import type { Request, Response } from "@plume-works/expo-bridge-protocol";
 
 /** Frames on the container socket: a log line while a build runs, then one final response. */
-export type Frame =
-  | { kind: "log"; line: string }
-  | { kind: "response"; response: Response };
+export type Frame = { kind: "log"; line: string } | { kind: "response"; response: Response };
 
 export function encodeRequest(req: Request): string {
   return JSON.stringify(req) + "\n";

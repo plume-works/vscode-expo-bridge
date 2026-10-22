@@ -55,7 +55,10 @@ export async function status(d: StatusDeps): Promise<StatusResult> {
         ok: hostPathExists,
         detail: hostPathExists ? undefined : "workspace host path does not exist locally",
       },
-      workspaceTrusted: { ok: d.trusted, detail: d.trusted ? undefined : "workspace is not trusted" },
+      workspaceTrusted: {
+        ok: d.trusted,
+        detail: d.trusted ? undefined : "workspace is not trusted",
+      },
       xcode: { ok: false },
       cocoapods: { ok: false },
       fastlane: { ok: false },
@@ -127,11 +130,15 @@ function readProjectId(hostPath: string, fileExists: (p: string) => boolean): bo
 async function bootedSimulator(d: StatusDeps): Promise<boolean> {
   const xcrun = lookupTool("xcrun", d.env, d.fileExists);
   if (!xcrun) return false;
-  const r = await d.runner.run(xcrun, ["simctl", "list", "devices", "booted", "-j"], { env: d.env });
+  const r = await d.runner.run(xcrun, ["simctl", "list", "devices", "booted", "-j"], {
+    env: d.env,
+  });
   if (r.code !== 0) return false;
   try {
     const parsed = JSON.parse(r.stdout) as { devices?: Record<string, unknown[]> };
-    return Object.values(parsed.devices ?? {}).some((list) => Array.isArray(list) && list.length > 0);
+    return Object.values(parsed.devices ?? {}).some(
+      (list) => Array.isArray(list) && list.length > 0,
+    );
   } catch {
     return false;
   }

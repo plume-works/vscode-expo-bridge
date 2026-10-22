@@ -30,6 +30,7 @@ packages/
 
 ```bash
 bun install
+bun run lint        # prettier --check
 bun run typecheck   # tsc across every package
 bun test            # unit + CLI end-to-end tests
 bun run package     # build and package all three VSIX

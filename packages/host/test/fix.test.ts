@@ -3,7 +3,9 @@ import type { StatusResult } from "@plume-works/expo-bridge-protocol";
 import { PROTOCOL_VERSION } from "@plume-works/expo-bridge-protocol";
 import { planFixes } from "../src/fix";
 
-function statusWith(overrides: Partial<Record<keyof StatusResult["checks"], boolean>>): StatusResult {
+function statusWith(
+  overrides: Partial<Record<keyof StatusResult["checks"], boolean>>,
+): StatusResult {
   const ok = (name: keyof StatusResult["checks"]) => ({ ok: overrides[name] ?? true });
   return {
     protocolVersion: PROTOCOL_VERSION,
@@ -31,7 +33,9 @@ describe("planFixes", () => {
   });
 
   test("a Homebrew fix for each missing tool", () => {
-    const steps = planFixes(statusWith({ cocoapods: false, fastlane: false, node: false, bun: false }));
+    const steps = planFixes(
+      statusWith({ cocoapods: false, fastlane: false, node: false, bun: false }),
+    );
     const byCheck = Object.fromEntries(steps.map((s) => [s.check, s]));
     expect(byCheck.cocoapods?.commands).toEqual(["brew install cocoapods"]);
     expect(byCheck.fastlane?.commands).toEqual(["brew install fastlane"]);
@@ -51,7 +55,13 @@ describe("planFixes", () => {
 
   test("checks with no install remedy produce no step", () => {
     const steps = planFixes(
-      statusWith({ workspaceTrusted: false, expoToken: false, easProjectId: false, bootedSimulator: false, port8081Forwarded: false }),
+      statusWith({
+        workspaceTrusted: false,
+        expoToken: false,
+        easProjectId: false,
+        bootedSimulator: false,
+        port8081Forwarded: false,
+      }),
     );
     expect(steps).toEqual([]);
   });

@@ -67,7 +67,11 @@ function deps(partial: Partial<DispatchDeps> = {}): DispatchDeps {
       trusted: true,
       hasToken: true,
       env: { PATH: BINS },
-      runner: { async run() { return { code: 0, stdout: "", stderr: "" }; } },
+      runner: {
+        async run() {
+          return { code: 0, stdout: "", stderr: "" };
+        },
+      },
       fileExists: () => false,
       port8081Forwarded: true,
     }),
@@ -103,9 +107,13 @@ describe("dispatch", () => {
 
   test("status on a trusted workspace never prompts and reports the protocol version", async () => {
     let trustCalled = false;
-    const r = await dispatch({ action: "status" }, deps({ ensureTrusted: async () => (trustCalled = true, true) }));
+    const r = await dispatch(
+      { action: "status" },
+      deps({ ensureTrusted: async () => ((trustCalled = true), true) }),
+    );
     expect(r.ok).toBe(true);
-    if (r.ok) expect((r.result as { protocolVersion: number }).protocolVersion).toBe(PROTOCOL_VERSION);
+    if (r.ok)
+      expect((r.result as { protocolVersion: number }).protocolVersion).toBe(PROTOCOL_VERSION);
     expect(trustCalled).toBe(false);
   });
 
@@ -124,7 +132,10 @@ describe("dispatch", () => {
       expect(trustCalled).toBe(true);
       expect(r.ok).toBe(true);
       if (r.ok) {
-        expect((r.result as { checks: { workspaceTrusted: { ok: boolean } } }).checks.workspaceTrusted.ok).toBe(answer);
+        expect(
+          (r.result as { checks: { workspaceTrusted: { ok: boolean } } }).checks.workspaceTrusted
+            .ok,
+        ).toBe(answer);
       }
     }
   });
@@ -136,7 +147,11 @@ describe("dispatch", () => {
       { action: "status" },
       {
         ...base,
-        statusDeps: async (req) => ({ ...(await base.statusDeps(req)), platform: "linux", trusted: false }),
+        statusDeps: async (req) => ({
+          ...(await base.statusDeps(req)),
+          platform: "linux",
+          trusted: false,
+        }),
         ensureTrusted: async () => ((trustCalled = true), true),
       },
     );
@@ -147,7 +162,10 @@ describe("dispatch", () => {
     let buildDepsCalled = false;
     const r = await dispatch(
       { action: "build", profile: "development" },
-      deps({ confirmBuild: async () => false, buildDeps: async () => (buildDepsCalled = true, {} as never) }),
+      deps({
+        confirmBuild: async () => false,
+        buildDeps: async () => ((buildDepsCalled = true), {} as never),
+      }),
     );
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error.code).toBe("build-declined");
@@ -172,6 +190,9 @@ describe("dispatch", () => {
   test("a full build routes through and returns an artifact path", async () => {
     const r = await dispatch({ action: "build", profile: "development" }, deps());
     expect(r.ok).toBe(true);
-    if (r.ok) expect((r.result as { artifactRel: string }).artifactRel.startsWith(".tmp/expo-bridge/")).toBe(true);
+    if (r.ok)
+      expect(
+        (r.result as { artifactRel: string }).artifactRel.startsWith(".tmp/expo-bridge/"),
+      ).toBe(true);
   });
 });

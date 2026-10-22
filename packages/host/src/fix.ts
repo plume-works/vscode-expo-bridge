@@ -33,16 +33,28 @@ export function planFixes(status: StatusResult): FixStep[] {
     });
   }
   if (!c.cocoapods.ok) {
-    steps.push({ check: "cocoapods", label: "Install CocoaPods", commands: ["brew install cocoapods"] });
+    steps.push({
+      check: "cocoapods",
+      label: "Install CocoaPods",
+      commands: ["brew install cocoapods"],
+    });
   }
   if (!c.fastlane.ok) {
-    steps.push({ check: "fastlane", label: "Install fastlane", commands: ["brew install fastlane"] });
+    steps.push({
+      check: "fastlane",
+      label: "Install fastlane",
+      commands: ["brew install fastlane"],
+    });
   }
   if (!c.node.ok) {
     steps.push({ check: "node", label: "Install Node", commands: ["brew install node"] });
   }
   if (!c.bun.ok) {
-    steps.push({ check: "bun", label: "Install or update bun", commands: ["brew install oven-sh/bun/bun"] });
+    steps.push({
+      check: "bun",
+      label: "Install or update bun",
+      commands: ["brew install oven-sh/bun/bun"],
+    });
   }
   return steps;
 }

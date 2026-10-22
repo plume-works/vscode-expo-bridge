@@ -10,11 +10,7 @@ export interface ExecResult {
  * Run a program with an argument array — never a shell string, so a crafted argument
  * cannot inject a command. Resolves even on a non-zero exit; the caller inspects `code`.
  */
-export function run(
-  file: string,
-  args: string[],
-  opts: RunOptions = {},
-): Promise<ExecResult> {
+export function run(file: string, args: string[], opts: RunOptions = {}): Promise<ExecResult> {
   return new Promise((resolve) => {
     const child = execFile(
       file,
@@ -27,11 +23,12 @@ export function run(
         encoding: "utf8",
       },
       (err, stdout, stderr) => {
-        const code = err && typeof (err as { code?: unknown }).code === "number"
-          ? (err as { code: number }).code
-          : err
-            ? 1
-            : 0;
+        const code =
+          err && typeof (err as { code?: unknown }).code === "number"
+            ? (err as { code: number }).code
+            : err
+              ? 1
+              : 0;
         resolve({ code, stdout: String(stdout), stderr: String(stderr) });
       },
     );

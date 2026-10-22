@@ -1,7 +1,11 @@
 #!/usr/bin/env node
 import { execFileSync } from "node:child_process";
 import * as net from "node:net";
-import { PROTOCOL_VERSION, SOCKET_PATH, type StatusResult } from "@plume-works/expo-bridge-protocol";
+import {
+  PROTOCOL_VERSION,
+  SOCKET_PATH,
+  type StatusResult,
+} from "@plume-works/expo-bridge-protocol";
 import { containerBunVersion, parseArgs, UsageError } from "../src/cli-args";
 import { encodeRequest, LineDecoder, type Frame } from "../src/wire";
 
@@ -16,9 +20,10 @@ async function main(): Promise<number> {
   let request;
   try {
     const argv = process.argv.slice(2);
-    const bun = argv[0] === "status"
-      ? containerBunVersion((file, args) => execFileSync(file, args, { encoding: "utf8" }))
-      : undefined;
+    const bun =
+      argv[0] === "status"
+        ? containerBunVersion((file, args) => execFileSync(file, args, { encoding: "utf8" }))
+        : undefined;
     request = parseArgs(argv, bun);
   } catch (e) {
     process.stderr.write((e instanceof UsageError ? e.message : String(e)) + "\n");

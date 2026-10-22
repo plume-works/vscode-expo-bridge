@@ -95,12 +95,7 @@ export interface ScreenshotResult {
   screenshotRel: string;
 }
 
-export type Result =
-  | StatusResult
-  | BuildResult
-  | InstallResult
-  | LaunchResult
-  | ScreenshotResult;
+export type Result = StatusResult | BuildResult | InstallResult | LaunchResult | ScreenshotResult;
 
 export type ErrorCode =
   | "untrusted" // the workspace is not trusted on the Mac (declined or dismissed)
@@ -119,9 +114,7 @@ export interface ProtocolError {
   message: string;
 }
 
-export type Response =
-  | { ok: true; result: Result }
-  | { ok: false; error: ProtocolError };
+export type Response = { ok: true; result: Result } | { ok: false; error: ProtocolError };
 
 export function isAction(value: unknown): value is Action {
   return typeof value === "string" && (ACTIONS as readonly string[]).includes(value);

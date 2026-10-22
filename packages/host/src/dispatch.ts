@@ -30,7 +30,11 @@ function ok(result: Result): Response {
 }
 
 export async function dispatch(request: unknown, deps: DispatchDeps): Promise<Response> {
-  if (typeof request !== "object" || request === null || !isAction((request as { action?: unknown }).action)) {
+  if (
+    typeof request !== "object" ||
+    request === null ||
+    !isAction((request as { action?: unknown }).action)
+  ) {
     return { ok: false, error: { code: "bad-request", message: "unknown or missing action" } };
   }
   const req = request as Request;

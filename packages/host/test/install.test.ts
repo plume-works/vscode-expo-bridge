@@ -44,7 +44,10 @@ function runner(
         const dest = args[destIdx]!;
         const app = path.join(dest, "MyApp.app");
         fs.mkdirSync(app, { recursive: true });
-        fs.writeFileSync(path.join(app, "Info.plist"), Buffer.from([0x62, 0x70, 0x6c, 0x69, 0x73, 0x74, 0x30, 0x30, 0xff]));
+        fs.writeFileSync(
+          path.join(app, "Info.plist"),
+          Buffer.from([0x62, 0x70, 0x6c, 0x69, 0x73, 0x74, 0x30, 0x30, 0xff]),
+        );
         return { code: 0, stdout: "", stderr: "" };
       }
       if (file.endsWith("plutil")) {
@@ -182,7 +185,9 @@ describe("screenshot", () => {
 
   test("a failed capture leaves nothing under .tmp/expo-bridge", async () => {
     try {
-      await screenshot(ctx({ runner: runner([], { code: 1, stdout: "", stderr: "No devices are booted" }) }));
+      await screenshot(
+        ctx({ runner: runner([], { code: 1, stdout: "", stderr: "No devices are booted" }) }),
+      );
       throw new Error("should have thrown");
     } catch (e) {
       expect((e as ActionError).error.code).toBe("action-failed");

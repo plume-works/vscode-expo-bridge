@@ -3,7 +3,10 @@ import { containerBunVersion, parseArgs, UsageError } from "../src/cli-args";
 
 describe("parseArgs", () => {
   test("status, with the container bun version attached", () => {
-    expect(parseArgs(["status"], "1.4.3")).toEqual({ action: "status", containerBunVersion: "1.4.3" });
+    expect(parseArgs(["status"], "1.4.3")).toEqual({
+      action: "status",
+      containerBunVersion: "1.4.3",
+    });
   });
 
   test("status without a version omits the field", () => {
@@ -11,7 +14,10 @@ describe("parseArgs", () => {
   });
 
   test("build requires a profile", () => {
-    expect(parseArgs(["build", "development"])).toEqual({ action: "build", profile: "development" });
+    expect(parseArgs(["build", "development"])).toEqual({
+      action: "build",
+      profile: "development",
+    });
     expect(() => parseArgs(["build"])).toThrow(UsageError);
   });
 

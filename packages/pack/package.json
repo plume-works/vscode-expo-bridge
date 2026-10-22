@@ -12,7 +12,9 @@
   "engines": {
     "vscode": "^1.90.0"
   },
-  "categories": ["Extension Packs"],
+  "categories": [
+    "Extension Packs"
+  ],
   "extensionPack": [
     "plume-works.vscode-expo-bridge-host",
     "plume-works.vscode-expo-bridge-workspace"

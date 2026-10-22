@@ -81,7 +81,8 @@ export async function launch(ctx: SimContext): Promise<LaunchResult> {
   const r = await ctx.runner.run(xcrun(ctx), ["simctl", "launch", "booted", bundleId], {
     env: ctx.env,
   });
-  if (r.code !== 0) throw new ActionError({ code: "action-failed", message: "simctl launch failed" });
+  if (r.code !== 0)
+    throw new ActionError({ code: "action-failed", message: "simctl launch failed" });
   return { bundleIdentifier: bundleId };
 }
 
@@ -133,7 +134,8 @@ async function bundleIdOf(appDir: string, ctx: SimContext): Promise<string> {
   const plutil = lookupTool("plutil", ctx.env, ctx.fileExists) ?? "/usr/bin/plutil";
   const plist = path.join(appDir, "Info.plist");
   const r = await ctx.runner.run(plutil, ["-convert", "json", "-o", "-", plist], { env: ctx.env });
-  if (r.code !== 0) throw new ActionError({ code: "action-failed", message: "Info.plist is unreadable" });
+  if (r.code !== 0)
+    throw new ActionError({ code: "action-failed", message: "Info.plist is unreadable" });
   let id: unknown;
   try {
     id = (JSON.parse(r.stdout) as { CFBundleIdentifier?: unknown }).CFBundleIdentifier;
@@ -144,7 +146,10 @@ async function bundleIdOf(appDir: string, ctx: SimContext): Promise<string> {
     throw new ActionError({ code: "not-found", message: "CFBundleIdentifier not found" });
   }
   if (!BUNDLE_ID_RE.test(id)) {
-    throw new ActionError({ code: "bad-argument", message: "CFBundleIdentifier is not a bundle id" });
+    throw new ActionError({
+      code: "bad-argument",
+      message: "CFBundleIdentifier is not a bundle id",
+    });
   }
   return id;
 }

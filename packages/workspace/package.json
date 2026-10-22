@@ -12,10 +12,16 @@
   "engines": {
     "vscode": "^1.90.0"
   },
-  "categories": ["Other"],
-  "extensionKind": ["workspace"],
+  "categories": [
+    "Other"
+  ],
+  "extensionKind": [
+    "workspace"
+  ],
   "main": "./dist/extension.js",
-  "activationEvents": ["workspaceContains:eas.json"],
+  "activationEvents": [
+    "workspaceContains:eas.json"
+  ],
   "scripts": {
     "build": "bun build src/extension.ts --outdir dist --target node --format cjs --external vscode && bun build bin/eas-host.ts --outdir dist --target node --format cjs",
     "package": "bun run build && vsce package --no-dependencies --out vscode-expo-bridge-workspace.vsix"

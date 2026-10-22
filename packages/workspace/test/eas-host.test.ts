@@ -63,7 +63,15 @@ describe("eas-host CLI", () => {
 
     test("status success prints the result and exits 0", async () => {
       onRequest = (_req, conn) => {
-        conn.write(encodeFrame({ kind: "response", response: { ok: true, result: { protocolVersion: 1, available: true, checks: {} as never } } }));
+        conn.write(
+          encodeFrame({
+            kind: "response",
+            response: {
+              ok: true,
+              result: { protocolVersion: 1, available: true, checks: {} as never },
+            },
+          }),
+        );
         conn.end();
       };
       const r = await runCli(["status"]);
@@ -73,7 +81,15 @@ describe("eas-host CLI", () => {
 
     test("a status result with available false prints it and exits 3", async () => {
       onRequest = (_req, conn) => {
-        conn.write(encodeFrame({ kind: "response", response: { ok: true, result: { protocolVersion: 1, available: false, checks: {} as never } } }));
+        conn.write(
+          encodeFrame({
+            kind: "response",
+            response: {
+              ok: true,
+              result: { protocolVersion: 1, available: false, checks: {} as never },
+            },
+          }),
+        );
         conn.end();
       };
       const r = await runCli(["status"]);
@@ -83,7 +99,15 @@ describe("eas-host CLI", () => {
 
     test("a status from a host on another protocol version exits 3 and names both", async () => {
       onRequest = (_req, conn) => {
-        conn.write(encodeFrame({ kind: "response", response: { ok: true, result: { protocolVersion: 999, available: true, checks: {} as never } } }));
+        conn.write(
+          encodeFrame({
+            kind: "response",
+            response: {
+              ok: true,
+              result: { protocolVersion: 999, available: true, checks: {} as never },
+            },
+          }),
+        );
         conn.end();
       };
       const r = await runCli(["status"]);
@@ -94,7 +118,12 @@ describe("eas-host CLI", () => {
 
     test("an unavailable error exits 3", async () => {
       onRequest = (_req, conn) => {
-        conn.write(encodeFrame({ kind: "response", response: { ok: false, error: { code: "unavailable", message: "x" } } }));
+        conn.write(
+          encodeFrame({
+            kind: "response",
+            response: { ok: false, error: { code: "unavailable", message: "x" } },
+          }),
+        );
         conn.end();
       };
       expect((await runCli(["status"])).code).toBe(3);
@@ -102,7 +131,12 @@ describe("eas-host CLI", () => {
 
     test("an action failure exits 1", async () => {
       onRequest = (_req, conn) => {
-        conn.write(encodeFrame({ kind: "response", response: { ok: false, error: { code: "action-failed", message: "x" } } }));
+        conn.write(
+          encodeFrame({
+            kind: "response",
+            response: { ok: false, error: { code: "action-failed", message: "x" } },
+          }),
+        );
         conn.end();
       };
       expect((await runCli(["launch"])).code).toBe(1);
@@ -113,7 +147,19 @@ describe("eas-host CLI", () => {
         expect(req).toEqual({ action: "build", profile: "development" });
         conn.write(encodeFrame({ kind: "log", line: "PREBUILD" }));
         conn.write(encodeFrame({ kind: "log", line: "bun install v1.4.3" }));
-        conn.write(encodeFrame({ kind: "response", response: { ok: true, result: { artifactRel: ".tmp/expo-bridge/a.tar.gz", logRel: ".tmp/expo-bridge/b.log", exitCode: 0 } } }));
+        conn.write(
+          encodeFrame({
+            kind: "response",
+            response: {
+              ok: true,
+              result: {
+                artifactRel: ".tmp/expo-bridge/a.tar.gz",
+                logRel: ".tmp/expo-bridge/b.log",
+                exitCode: 0,
+              },
+            },
+          }),
+        );
         conn.end();
       };
       const r = await runCli(["build", "development"]);

@@ -3,7 +3,12 @@ import * as net from "node:net";
 import * as os from "node:os";
 import * as path from "node:path";
 import * as vscode from "vscode";
-import { SOCKET_PATH, WRITE_DIR_REL, type Request, type Response } from "@plume-works/expo-bridge-protocol";
+import {
+  SOCKET_PATH,
+  WRITE_DIR_REL,
+  type Request,
+  type Response,
+} from "@plume-works/expo-bridge-protocol";
 import { encodeFrame, LineDecoder } from "./wire";
 
 const DISPATCH_COMMAND = "expoBridge.ui.dispatch";
@@ -85,7 +90,10 @@ async function handleRequest(
   } catch (e) {
     emit({
       kind: "response",
-      response: { ok: false, error: { code: "action-failed", message: String((e as Error)?.message ?? e) } },
+      response: {
+        ok: false,
+        error: { code: "action-failed", message: String((e as Error)?.message ?? e) },
+      },
     });
   } finally {
     stopTail?.();
@@ -109,8 +117,9 @@ export function activate(context: vscode.ExtensionContext): void {
 
   const server = net.createServer((conn) => {
     const decoder = new LineDecoder<Request>();
-    const emit = (frame: { kind: "log"; line: string } | { kind: "response"; response: Response }) =>
-      conn.write(encodeFrame(frame));
+    const emit = (
+      frame: { kind: "log"; line: string } | { kind: "response"; response: Response },
+    ) => conn.write(encodeFrame(frame));
     conn.on("data", (chunk) => {
       for (const request of decoder.feed(chunk.toString("utf8"))) {
         void handleRequest(request, workspaceRoot, emit).then(() => conn.end());
@@ -118,7 +127,10 @@ export function activate(context: vscode.ExtensionContext): void {
     });
     conn.on("error", () => conn.destroy());
   });
-  server.on("error", (e) => void vscode.window.showWarningMessage(`Expo Bridge socket: ${String(e)}`));
+  server.on(
+    "error",
+    (e) => void vscode.window.showWarningMessage(`Expo Bridge socket: ${String(e)}`),
+  );
   server.listen(SOCKET_PATH);
 
   context.subscriptions.push({

@@ -21,13 +21,18 @@ function runnerFor(overrides: Record<string, ExecResult> = {}): Runner {
   const defaults: Record<string, ExecResult> = {
     node: { code: 0, stdout: "v20.0.0", stderr: "" },
     bun: { code: 0, stdout: "1.4.3", stderr: "" },
-    "simctl list": { code: 0, stdout: JSON.stringify({ devices: { ios: [{ state: "Booted" }] } }), stderr: "" },
+    "simctl list": {
+      code: 0,
+      stdout: JSON.stringify({ devices: { ios: [{ state: "Booted" }] } }),
+      stderr: "",
+    },
   };
   return {
     async run(file, args) {
       if (file.endsWith("/node")) return defaults.node;
       if (file.endsWith("/bun")) return overrides.bun ?? defaults.bun;
-      if (file.endsWith("/xcrun") && args[0] === "simctl") return overrides.simctl ?? defaults["simctl list"];
+      if (file.endsWith("/xcrun") && args[0] === "simctl")
+        return overrides.simctl ?? defaults["simctl list"];
       if (file.endsWith("/xcrun") && args[0] === "xcodebuild") {
         return overrides.xcodebuild ?? { code: 0, stdout: "Xcode 26.0", stderr: "" };
       }
@@ -94,7 +99,11 @@ describe("checks", () => {
     const r = await status(
       deps({
         runner: runnerFor({
-          xcodebuild: { code: 1, stdout: "", stderr: "xcode-select: error: tool 'xcodebuild' requires Xcode" },
+          xcodebuild: {
+            code: 1,
+            stdout: "",
+            stderr: "xcode-select: error: tool 'xcodebuild' requires Xcode",
+          },
         }),
       }),
     );
@@ -118,7 +127,11 @@ describe("checks", () => {
 
   test("no booted simulator is reported", async () => {
     const r = await status(
-      deps({ runner: runnerFor({ simctl: { code: 0, stdout: JSON.stringify({ devices: {} }), stderr: "" } }) }),
+      deps({
+        runner: runnerFor({
+          simctl: { code: 0, stdout: JSON.stringify({ devices: {} }), stderr: "" },
+        }),
+      }),
     );
     expect(r.checks.bootedSimulator.ok).toBe(false);
   });

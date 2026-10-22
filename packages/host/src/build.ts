@@ -41,7 +41,8 @@ export function profilesOf(easJson: unknown): string[] {
  * fresh-write rule. The caller has already gated trust and the confirmation.
  */
 export async function build(profile: string, d: BuildDeps): Promise<BuildResult> {
-  if (!d.confirmed) throw new BuildError({ code: "build-declined", message: "build not confirmed" });
+  if (!d.confirmed)
+    throw new BuildError({ code: "build-declined", message: "build not confirmed" });
   if (!PROFILE_RE.test(profile)) {
     throw new BuildError({ code: "bad-argument", message: "invalid profile name" });
   }
@@ -71,7 +72,9 @@ export async function build(profile: string, d: BuildDeps): Promise<BuildResult>
 
   const outDir = path.join(d.hostPath, WRITE_DIR_REL);
   fs.mkdirSync(outDir, { recursive: true });
-  const { fd: logFd, written: logPath } = openFreshUnique(path.join(outDir, `build-${d.now()}.log`));
+  const { fd: logFd, written: logPath } = openFreshUnique(
+    path.join(outDir, `build-${d.now()}.log`),
+  );
   let r;
   try {
     r = await d.runner.run(

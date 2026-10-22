@@ -46,7 +46,10 @@ function offerFixes(result: StatusResult): void {
   const steps = planFixes(result);
   if (!steps.length) return;
   void vscode.window
-    .showWarningMessage(`Expo Bridge: missing on this Mac: ${steps.map((s) => s.check).join(", ")}.`, "Fix…")
+    .showWarningMessage(
+      `Expo Bridge: missing on this Mac: ${steps.map((s) => s.check).join(", ")}.`,
+      "Fix…",
+    )
     .then((choice) => {
       if (choice === "Fix…") void vscode.commands.executeCommand("expoBridge.fix");
     });
@@ -120,12 +123,16 @@ export function activate(context: vscode.ExtensionContext): void {
   const trust = new TrustStore(context.globalState, context.secrets, prompts());
 
   context.subscriptions.push(
-    vscode.commands.registerCommand(DISPATCH_COMMAND, async (request: Request & { containerBunVersion?: string }) => {
-      const make = buildDispatchDeps(trust, globalStorage, request?.containerBunVersion);
-      const response = await dispatch(request, await make());
-      if (request?.action === "status" && response.ok) offerFixes(response.result as StatusResult);
-      return response;
-    }),
+    vscode.commands.registerCommand(
+      DISPATCH_COMMAND,
+      async (request: Request & { containerBunVersion?: string }) => {
+        const make = buildDispatchDeps(trust, globalStorage, request?.containerBunVersion);
+        const response = await dispatch(request, await make());
+        if (request?.action === "status" && response.ok)
+          offerFixes(response.result as StatusResult);
+        return response;
+      },
+    ),
 
     vscode.commands.registerCommand("expoBridge.setToken", async () => {
       const value = await vscode.window.showInputBox({
@@ -155,7 +162,10 @@ export function activate(context: vscode.ExtensionContext): void {
       const decisions = trust.listDecisions();
       const pick = await vscode.window.showQuickPick(
         decisions.length
-          ? decisions.map((d) => ({ label: d.hostPath, description: d.decision === "allow" ? "trusted" : "declined" }))
+          ? decisions.map((d) => ({
+              label: d.hostPath,
+              description: d.decision === "allow" ? "trusted" : "declined",
+            }))
           : [{ label: "No recorded workspaces", description: "" }],
         { title: "Revoke a workspace's trust decision", canPickMany: false },
       );

@@ -17,7 +17,9 @@ describe("encoding", () => {
 describe("LineDecoder", () => {
   test("yields one value per complete line and holds the partial tail", () => {
     const d = new LineDecoder<Frame>();
-    expect(d.feed('{"kind":"log","line":"a"}\n{"kind":"log","li')).toEqual([{ kind: "log", line: "a" }]);
+    expect(d.feed('{"kind":"log","line":"a"}\n{"kind":"log","li')).toEqual([
+      { kind: "log", line: "a" },
+    ]);
     expect(d.feed('ne":"b"}\n')).toEqual([{ kind: "log", line: "b" }]);
   });
 
@@ -31,7 +33,17 @@ describe("LineDecoder", () => {
     const wire =
       encodeFrame({ kind: "log", line: "PREBUILD" }) +
       encodeFrame({ kind: "log", line: "done" }) +
-      encodeFrame({ kind: "response", response: { ok: true, result: { artifactRel: ".tmp/expo-bridge/a.tar.gz", logRel: ".tmp/expo-bridge/b.log", exitCode: 0 } } });
+      encodeFrame({
+        kind: "response",
+        response: {
+          ok: true,
+          result: {
+            artifactRel: ".tmp/expo-bridge/a.tar.gz",
+            logRel: ".tmp/expo-bridge/b.log",
+            exitCode: 0,
+          },
+        },
+      });
     const frames = d.feed(wire);
     expect(frames.filter((f) => f.kind === "log")).toHaveLength(2);
     const last = frames[frames.length - 1]!;

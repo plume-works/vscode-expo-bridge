@@ -31,7 +31,10 @@ interface Captured {
 }
 
 /** A runner that records the invocation and drops an artifact in the build dir. */
-function recordingRunner(captured: Captured[], result: ExecResult = { code: 0, stdout: "log", stderr: "" }): Runner {
+function recordingRunner(
+  captured: Captured[],
+  result: ExecResult = { code: 0, stdout: "log", stderr: "" },
+): Runner {
   return {
     async run(file, args, opts) {
       captured.push({ file, args, env: opts?.env ?? {}, cwd: opts?.cwd });
@@ -93,7 +96,13 @@ describe("invocation", () => {
     const c = captured[0]!;
     expect(c.file).toBe(`${BINS}/eas`);
     expect(c.args).toEqual([
-      "build", "--local", "--non-interactive", "-p", "ios", "--profile", "development",
+      "build",
+      "--local",
+      "--non-interactive",
+      "-p",
+      "ios",
+      "--profile",
+      "development",
     ]);
     expect(c.cwd).toBe(hostPath);
     expect(c.env.EAS_NO_VCS).toBe("1");
