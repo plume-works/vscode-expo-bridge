@@ -89,24 +89,21 @@ describe("validation", () => {
 });
 
 describe("invocation", () => {
-  test("runs the eas-cli version package.json pins, devDependencies first", async () => {
+  const easJson = (cli: unknown) =>
     fs.writeFileSync(
-      path.join(hostPath, "package.json"),
-      JSON.stringify({
-        dependencies: { "eas-cli": "16.0.0" },
-        devDependencies: { "eas-cli": ">=16.2.0 <17" },
-      }),
+      path.join(hostPath, "eas.json"),
+      JSON.stringify({ cli, build: { development: { ios: { simulator: true } } } }),
     );
+
+  test("runs the eas-cli version eas.json's cli.version pins", async () => {
+    easJson({ version: ">= 16.0.0" });
     const captured: Captured[] = [];
     await build("development", deps({ runner: recordingRunner(captured) }));
-    expect(captured[0]!.args.slice(0, 3)).toEqual(["x", "eas-cli@>=16.2.0 <17", "build"]);
+    expect(captured[0]!.args.slice(0, 3)).toEqual(["x", "eas-cli@>=16.0.0", "build"]);
   });
 
-  test("refuses a package.json eas-cli spec that is not a version range", async () => {
-    fs.writeFileSync(
-      path.join(hostPath, "package.json"),
-      JSON.stringify({ devDependencies: { "eas-cli": "file:../evil" } }),
-    );
+  test("refuses a cli.version that is not a version range", async () => {
+    easJson({ version: "file:../evil" });
     const captured: Captured[] = [];
     try {
       await build("development", deps({ runner: recordingRunner(captured) }));
