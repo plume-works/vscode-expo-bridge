@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import * as net from "node:net";
 import * as path from "node:path";
 import { SOCKET_PATH, type Request } from "@plume-works/expo-bridge-protocol";
+import { HELP } from "../src/cli-args";
 import { encodeFrame, LineDecoder } from "../src/wire";
 
 const CLI = path.join(import.meta.dir, "..", "bin", "eas-host.ts");
@@ -27,6 +28,12 @@ describe("eas-host CLI", () => {
     const r = await runCli(["deploy"]);
     expect(r.code).toBe(2);
     expect(r.stderr).toContain("usage");
+  });
+
+  test("--help prints the help on stdout and exits 0", async () => {
+    const r = await runCli(["--help"]);
+    expect(r.code).toBe(0);
+    expect(r.stdout).toBe(HELP + "\n");
   });
 
   test("build with no profile exits 2", async () => {

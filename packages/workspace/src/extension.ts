@@ -9,6 +9,8 @@ import {
   type Request,
   type Response,
 } from "@plume-works/expo-bridge-protocol";
+import { resolveRequest } from "./artifacts";
+import type { CliRequest } from "./cli-args";
 import { encodeFrame, LineDecoder } from "./wire";
 
 const DISPATCH_COMMAND = "expoBridge.ui.dispatch";
@@ -68,10 +70,16 @@ function newestBuildLog(workspaceRoot: string, since: number): string | null {
 }
 
 async function handleRequest(
-  request: Request,
+  cliRequest: CliRequest,
   workspaceRoot: string | undefined,
   emit: (frame: { kind: "log"; line: string } | { kind: "response"; response: Response }) => void,
 ): Promise<void> {
+  const resolved = resolveRequest(cliRequest, workspaceRoot);
+  if ("error" in resolved) {
+    emit({ kind: "response", response: { ok: false, error: resolved.error } });
+    return;
+  }
+  const request: Request = resolved.request;
   let stopTail: (() => void) | undefined;
   if (request.action === "build" && workspaceRoot) {
     const since = Date.now();
@@ -116,7 +124,7 @@ export function activate(context: vscode.ExtensionContext): void {
   }
 
   const server = net.createServer((conn) => {
-    const decoder = new LineDecoder<Request>();
+    const decoder = new LineDecoder<CliRequest>();
     const emit = (
       frame: { kind: "log"; line: string } | { kind: "response"; response: Response },
     ) => conn.write(encodeFrame(frame));
