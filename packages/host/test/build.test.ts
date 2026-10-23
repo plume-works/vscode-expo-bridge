@@ -89,6 +89,12 @@ describe("validation", () => {
 });
 
 describe("invocation", () => {
+  test("leaves nothing in private storage once the artifact is copied out", async () => {
+    const r = await build("development", deps({ runner: recordingRunner([]) }));
+    expect(r.artifactRel).not.toBe("");
+    expect(fs.readdirSync(storage)).toEqual([]);
+  });
+
   const easJson = (cli: unknown) =>
     fs.writeFileSync(
       path.join(hostPath, "eas.json"),
