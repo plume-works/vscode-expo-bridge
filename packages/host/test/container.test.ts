@@ -1,5 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { bindMounts, ContainerError, dockerHostArgs, findContainer } from "../src/container";
+import {
+  bindMounts,
+  ContainerError,
+  dockerHostArgs,
+  findContainer,
+  macSource,
+} from "../src/container";
 import type { ExecResult, Runner } from "../src/exec";
 
 function recording(result: Partial<ExecResult>): { runner: Runner; calls: string[][] } {
@@ -81,7 +87,43 @@ describe("findContainer", () => {
   });
 });
 
+describe("macSource", () => {
+  test("drops Docker Desktop's /host_mnt prefix and leaves other sources alone", () => {
+    expect(macSource("/host_mnt/Users/me/app")).toBe("/Users/me/app");
+    expect(macSource("/socket_mnt/Users/me/engine.sock")).toBe("/socket_mnt/Users/me/engine.sock");
+    expect(macSource("/host_mntx/Users/me")).toBe("/host_mntx/Users/me");
+    expect(macSource("/Users/me/app")).toBe("/Users/me/app");
+  });
+});
+
 describe("bindMounts", () => {
+  test("reports Docker Desktop's bind sources as Mac paths", async () => {
+    // The shape Docker Desktop for Mac reports for a Dev Containers workspace.
+    const mounts = [
+      {
+        Type: "volume",
+        Name: "vscode",
+        Source: "/var/lib/docker/volumes/vscode/_data",
+        Destination: "/vscode",
+      },
+      { Type: "bind", Source: "/host_mnt/Users/me/repo", Destination: "/workspaces/repo" },
+      { Type: "bind", Source: "/host_mnt/Users/me/repo", Destination: "/Users/me/repo" },
+      { Type: "bind", Source: "/host_mnt/Users/me/repo/.git", Destination: "/Users/me/repo/.git" },
+      {
+        Type: "bind",
+        Source: "/socket_mnt/Users/me/engine.sock",
+        Destination: "/root/engine.sock",
+      },
+    ];
+    const { runner } = recording({ stdout: JSON.stringify(mounts) });
+    expect(await bindMounts("docker", "abc", undefined, runner, {})).toEqual([
+      { source: "/Users/me/repo", destination: "/workspaces/repo" },
+      { source: "/Users/me/repo", destination: "/Users/me/repo" },
+      { source: "/Users/me/repo/.git", destination: "/Users/me/repo/.git" },
+      { source: "/socket_mnt/Users/me/engine.sock", destination: "/root/engine.sock" },
+    ]);
+  });
+
   test("keeps the bind mounts and drops volumes and other types", async () => {
     const mounts = [
       { Type: "bind", Source: "/Users/me/app", Destination: "/workspaces/app" },

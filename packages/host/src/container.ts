@@ -11,10 +11,20 @@ export interface ContainerTarget {
 }
 
 export interface BindMount {
-  /** The Mac path mounted. */
+  /** The Mac path mounted, with Docker Desktop's VM prefix removed. */
   source: string;
   /** Where it appears in the container. */
   destination: string;
+}
+
+/** Docker Desktop reports a bind source from the Mac as its path inside its VM. */
+const DOCKER_DESKTOP_HOST_MNT = "/host_mnt";
+
+/** The Mac path of a bind source; any other source is returned unchanged. */
+export function macSource(source: string): string {
+  return source.startsWith(DOCKER_DESKTOP_HOST_MNT + "/")
+    ? source.slice(DOCKER_DESKTOP_HOST_MNT.length)
+    : source;
 }
 
 /** `-H` for a non-default daemon; a bare socket path becomes a `unix://` URL. */
@@ -49,7 +59,10 @@ export async function findContainer(
   return ids[0]!.trim();
 }
 
-/** The container's bind mounts, read with `docker inspect`; other mount types are dropped. */
+/**
+ * The container's bind mounts, read with `docker inspect`, with Mac sources; other mount
+ * types are dropped.
+ */
 export async function bindMounts(
   docker: string,
   id: string,
@@ -80,7 +93,7 @@ export async function bindMounts(
   if (!Array.isArray(mounts)) throw new ContainerError("docker inspect returned no mounts");
   return mounts.flatMap((m: { Type?: unknown; Source?: unknown; Destination?: unknown }) =>
     m?.Type === "bind" && typeof m.Source === "string" && typeof m.Destination === "string"
-      ? [{ source: m.Source, destination: m.Destination }]
+      ? [{ source: macSource(m.Source), destination: m.Destination }]
       : [],
   );
 }

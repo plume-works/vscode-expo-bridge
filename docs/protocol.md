@@ -113,7 +113,8 @@ Before any action, the host maps the request's `folder` to the Mac path the acti
    passed as `unix://<path>`), and requires exactly one running container;
 4. it reads that container's bind mounts with `docker inspect`, takes the one whose
    destination is the longest path-component prefix of `folder`, and appends the rest of
-   `folder` to its source;
+   `folder` to its source, read as a Mac path: Docker Desktop reports a source from the
+   Mac under its VM's `/host_mnt`, which the host removes;
 5. it accepts the result only when it is the host path or lies under it, with no symlink
    component below the host path.
 
