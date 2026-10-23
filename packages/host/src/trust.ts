@@ -111,6 +111,18 @@ export class TrustStore {
     return true;
   }
 
+  /** Whether a build confirmation cooldown for this workspace is still live. */
+  hasCooldown(hostPath: string): boolean {
+    return (this.cooldownMap()[hostPath] ?? 0) > this.now();
+  }
+
+  /** End this workspace's cooldown so its next build asks again; trust is unchanged. */
+  async clearCooldown(hostPath: string): Promise<void> {
+    const cd = this.cooldownMap();
+    delete cd[hostPath];
+    await this.state.update(COOLDOWN_KEY, cd);
+  }
+
   getToken(): Thenable<string | undefined> {
     return this.secrets.get(TOKEN_KEY);
   }

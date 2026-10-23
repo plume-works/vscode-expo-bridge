@@ -177,3 +177,36 @@ describe("BUILD_ANSWERS", () => {
     ]);
   });
 });
+
+describe("clearCooldown", () => {
+  test("ends the cooldown so the next build asks again, and keeps trust", async () => {
+    let calls = 0;
+    const p: Prompts = { trust: async () => "allow", build: async () => (calls++, "hour") };
+    const store = new TrustStore(state, secrets, p, () => clock);
+    expect(await store.confirmBuild(HOST, "development")).toBe(true);
+    expect(store.hasCooldown(HOST)).toBe(true);
+    await store.clearCooldown(HOST);
+    expect(store.hasCooldown(HOST)).toBe(false);
+    expect(store.listTrusted()).toEqual([HOST]);
+    expect(await store.confirmBuild(HOST, "development")).toBe(true);
+    expect(calls).toBe(2);
+  });
+
+  test("clears only that workspace's cooldown", async () => {
+    const p: Prompts = { trust: async () => "allow", build: async () => "hour" };
+    const store = new TrustStore(state, secrets, p, () => clock);
+    await store.confirmBuild(HOST, "development");
+    await store.confirmBuild(OTHER, "development");
+    await store.clearCooldown(HOST);
+    expect(store.hasCooldown(HOST)).toBe(false);
+    expect(store.hasCooldown(OTHER)).toBe(true);
+  });
+
+  test("an expired cooldown is not live", async () => {
+    const p: Prompts = { trust: async () => "allow", build: async () => "hour" };
+    const store = new TrustStore(state, secrets, p, () => clock);
+    await store.confirmBuild(HOST, "development");
+    clock += 61 * 60 * 1000;
+    expect(store.hasCooldown(HOST)).toBe(false);
+  });
+});

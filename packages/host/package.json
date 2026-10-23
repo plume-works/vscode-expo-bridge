@@ -3,7 +3,7 @@
   "displayName": "Expo Bridge (Host)",
   "description": "Mac-side half of the Expo Bridge: builds, installs, launches, and screenshots an Expo iOS app for a devcontainer.",
   "publisher": "plume-works",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -35,6 +35,10 @@
       {
         "command": "expoBridge.manageTrust",
         "title": "Expo Bridge: Manage Trusted Workspaces"
+      },
+      {
+        "command": "expoBridge.askBeforeEveryBuild",
+        "title": "Expo Bridge: Ask Before Every Build"
       },
       {
         "command": "expoBridge.fix",
