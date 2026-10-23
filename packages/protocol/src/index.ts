@@ -3,10 +3,33 @@
 // the container; it accepts exactly the actions named here. The prose contract and
 // threat model live in docs/protocol.md.
 
-export const PROTOCOL_VERSION = 1 as const;
+export const PROTOCOL_VERSION = 2 as const;
 
-/** The container-side socket the workspace extension serves. One window, one container. */
-export const SOCKET_PATH = "/tmp/vscode-expo-bridge.sock";
+/**
+ * Each window's workspace extension serves `<id>.sock` here, next to `<id>.json`, its
+ * registry entry; several windows can share one container.
+ */
+export const SOCKET_DIR = "/tmp/vscode-expo-bridge";
+
+/** The `<id>.json` file a workspace extension writes next to its socket. */
+export interface RegistryEntry {
+  /** The extension host's process id; an entry whose process is gone is stale. */
+  pid: number;
+  /** Epoch ms of the activation, which breaks a tie between equally long folders. */
+  activatedAt: number;
+  /** The container paths of the window's workspace folders. */
+  folders: string[];
+}
+
+/** A registry entry read from disk, or null when it does not have the entry's shape. */
+export function parseRegistryEntry(value: unknown): RegistryEntry | null {
+  const e = value as Partial<RegistryEntry> | null;
+  if (typeof e !== "object" || e === null) return null;
+  if (!Number.isInteger(e.pid) || (e.pid as number) <= 0) return null;
+  if (typeof e.activatedAt !== "number" || !Number.isFinite(e.activatedAt)) return null;
+  if (!Array.isArray(e.folders) || !e.folders.every((f) => typeof f === "string")) return null;
+  return { pid: e.pid as number, activatedAt: e.activatedAt, folders: e.folders };
+}
 
 /** Every write the host extension makes under the workspace lands here, and nowhere else. */
 export const WRITE_DIR_REL = ".tmp/expo-bridge";
@@ -15,29 +38,34 @@ export type Action = "status" | "build" | "install" | "launch" | "screenshot";
 
 export const ACTIONS: readonly Action[] = ["status", "build", "install", "launch", "screenshot"];
 
-export interface StatusRequest {
+/** Every request names the workspace folder it acts on, by its container path. */
+interface FolderRequest {
+  folder: string;
+}
+
+export interface StatusRequest extends FolderRequest {
   action: "status";
   /** The container's own `bun --version`, so the host can compare it to the Mac's bun. */
   containerBunVersion?: string;
 }
 
-export interface BuildRequest {
+export interface BuildRequest extends FolderRequest {
   action: "build";
-  /** A profile name that must exist in the workspace's `eas.json`. */
+  /** A profile name that must exist in the folder's `eas.json`. */
   profile: string;
 }
 
-export interface InstallRequest {
+export interface InstallRequest extends FolderRequest {
   action: "install";
-  /** A workspace-relative path that must resolve under `.tmp/expo-bridge/`. */
+  /** A folder-relative path that must resolve under `.tmp/expo-bridge/`. */
   artifactRel: string;
 }
 
-export interface LaunchRequest {
+export interface LaunchRequest extends FolderRequest {
   action: "launch";
 }
 
-export interface ScreenshotRequest {
+export interface ScreenshotRequest extends FolderRequest {
   action: "screenshot";
 }
 
@@ -56,11 +84,14 @@ export interface StatusCheck {
 
 export interface StatusResult {
   protocolVersion: number;
-  /** False on a non-Mac host or when the workspace host path does not exist locally. */
+  /** False on a non-Mac host, without the host path locally, or when the folder does not map. */
   available: boolean;
+  /** The Mac path of the request's folder, which the checks inspected; empty when unmapped. */
+  folderHostPath: string;
   checks: {
     macHost: StatusCheck;
     hostPathExists: StatusCheck;
+    workspaceMapped: StatusCheck;
     workspaceTrusted: StatusCheck;
     xcode: StatusCheck;
     cocoapods: StatusCheck;
@@ -76,9 +107,9 @@ export interface StatusResult {
 }
 
 export interface BuildResult {
-  /** Workspace-relative path of the artifact copied under `.tmp/expo-bridge/`. */
+  /** Folder-relative path of the artifact copied under `.tmp/expo-bridge/`. */
   artifactRel: string;
-  /** Workspace-relative path of the build log, tailed by `eas-host` while running. */
+  /** Folder-relative path of the build log, tailed by `eas-host` while running. */
   logRel: string;
   exitCode: number;
 }
@@ -92,7 +123,7 @@ export interface LaunchResult {
 }
 
 export interface ScreenshotResult {
-  /** Workspace-relative path of the PNG written under `.tmp/expo-bridge/`. */
+  /** Folder-relative path of the PNG written under `.tmp/expo-bridge/`. */
   screenshotRel: string;
 }
 
@@ -101,8 +132,8 @@ export type Result = StatusResult | BuildResult | InstallResult | LaunchResult |
 export type ErrorCode =
   | "untrusted" // the workspace is not trusted on the Mac (declined or dismissed)
   | "build-declined" // the per-build confirmation was declined
-  | "unavailable" // non-Mac host, or the workspace host path does not exist
-  | "bad-request" // malformed request or an unknown action
+  | "unavailable" // non-Mac host, no host path, or the folder does not map under it
+  | "bad-request" // malformed request, an unknown action, or no folder
   | "bad-argument" // an argument failed validation (profile, path)
   | "path-escape" // a path resolved outside its allowed root
   | "symlink-rejected" // a path component or target is a symlink
