@@ -70,3 +70,21 @@ export function fixSummary(steps: FixStep[]): { text: string; tooltip: string } 
     tooltip: steps.map((s) => (s.detail ? `${s.label}: ${s.detail}` : s.label)).join("\n"),
   };
 }
+
+/** Announces each new set of failing checks once, so repeated status calls do not re-notify. */
+export class FixNotices {
+  private last = "";
+
+  /** The notification text when `steps` differ from the last announced set, else null. */
+  next(steps: FixStep[]): string | null {
+    const key = steps
+      .map((s) => s.check)
+      .sort()
+      .join(",");
+    if (key === this.last) return null;
+    this.last = key;
+    if (!steps.length) return null;
+    const what = steps.map((s) => (s.detail ? `${s.label} (${s.detail})` : s.label));
+    return `Expo Bridge: ${what.join("; ")}.`;
+  }
+}

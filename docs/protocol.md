@@ -217,7 +217,8 @@ treats any non-zero `eas-host status` as "use EAS cloud".
 
 When `status` finds a tool the one-click fix can install, the host extension shows a status
 bar item in the Mac window naming the number of fixes, with each failing check's detail in
-its tooltip. It stays until a later `status` finds nothing to fix. Clicking it, or running
+its tooltip, and a notification with a **Fix…** button whenever the set of failing checks
+changes. It stays until a later `status` finds nothing to fix. Clicking it, or running
 **Expo Bridge: Fix Missing Tools**, opens a picker that stays open when focus moves; only
 picking a fix there starts one, and only one runs at a time: Homebrew installs in a visible
 local terminal, and for Xcode the App Store page followed by `xcode-select`, the license

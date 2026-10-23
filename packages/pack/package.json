@@ -3,7 +3,7 @@
   "displayName": "Expo Bridge",
   "description": "Build, install, launch, and screenshot an Expo iOS app on the Mac host from a devcontainer, with EAS cloud as the fallback.",
   "publisher": "plume-works",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "license": "MIT",
   "repository": {
     "type": "git",

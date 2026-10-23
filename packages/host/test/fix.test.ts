@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { StatusResult } from "@plume-works/expo-bridge-protocol";
 import { PROTOCOL_VERSION } from "@plume-works/expo-bridge-protocol";
-import { fixSummary, planFixes } from "../src/fix";
+import { FixNotices, fixSummary, planFixes } from "../src/fix";
 
 function statusWith(
   overrides: Partial<Record<keyof StatusResult["checks"], boolean>>,
@@ -81,5 +81,28 @@ describe("fixSummary", () => {
     expect(summary?.text).toBe("$(warning) Expo Bridge: 2 fixes");
     expect(summary?.tooltip).toContain("Install or update bun: Mac bun 1.4.3 is older");
     expect(summary?.text).not.toContain("missing");
+  });
+});
+
+describe("FixNotices", () => {
+  test("announces a new set of failing checks once, with each detail", () => {
+    const notices = new FixNotices();
+    const s = statusWith({ bun: false });
+    s.checks.bun.detail = "Mac bun 1.4.3 is older than the container's 99.0.0";
+    const steps = planFixes(s);
+    expect(notices.next(steps)).toBe(
+      "Expo Bridge: Install or update bun (Mac bun 1.4.3 is older than the container's 99.0.0).",
+    );
+    expect(notices.next(steps)).toBeNull();
+  });
+
+  test("announces again when the set changes, and after it clears and returns", () => {
+    const notices = new FixNotices();
+    const bun = planFixes(statusWith({ bun: false }));
+    const both = planFixes(statusWith({ bun: false, fastlane: false }));
+    expect(notices.next(bun)).not.toBeNull();
+    expect(notices.next(both)).toContain("Install fastlane");
+    expect(notices.next([])).toBeNull();
+    expect(notices.next(bun)).not.toBeNull();
   });
 });

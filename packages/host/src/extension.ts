@@ -7,7 +7,7 @@ import { dispatch, type DispatchDeps } from "./dispatch";
 import { decodeHostPath } from "./hostpath";
 import { captureLoginEnv } from "./env";
 import { realRunner } from "./exec";
-import { fixSummary, planFixes } from "./fix";
+import { FixNotices, fixSummary, planFixes } from "./fix";
 import { FixGate, runCommands, type RunCommand } from "./fixrun";
 import type { InstalledApp } from "./install";
 import { portAcceptsConnections } from "./port";
@@ -39,16 +39,26 @@ const prompts = (): Prompts => ({
   },
 });
 
-/** Show pending fixes in a status bar item that lasts until a status has none. */
-function showFixes(item: vscode.StatusBarItem, result: StatusResult): void {
-  const summary = result.available ? fixSummary(planFixes(result)) : null;
-  if (!summary) {
+/**
+ * Show pending fixes in a status bar item that lasts until a status has none, and notify
+ * once whenever the set of failing checks changes.
+ */
+function showFixes(item: vscode.StatusBarItem, notices: FixNotices, result: StatusResult): void {
+  const steps = result.available ? planFixes(result) : [];
+  const summary = fixSummary(steps);
+  if (summary) {
+    item.text = summary.text;
+    item.tooltip = summary.tooltip;
+    item.show();
+  } else {
     item.hide();
-    return;
   }
-  item.text = summary.text;
-  item.tooltip = summary.tooltip;
-  item.show();
+  const notice = notices.next(steps);
+  if (notice) {
+    void vscode.window.showWarningMessage(notice, "Fix…").then((choice) => {
+      if (choice === "Fix…") void vscode.commands.executeCommand("expoBridge.fix");
+    });
+  }
 }
 
 /** How long to wait for shell integration before typing the commands without it. */
@@ -165,10 +175,11 @@ export function activate(context: vscode.ExtensionContext): void {
   fixItem.command = "expoBridge.fix";
   context.subscriptions.push(fixItem);
   const fixGate = new FixGate();
+  const fixNotices = new FixNotices();
   const recheck = async () => {
     const deps = await buildDispatchDeps(trust, globalStorage, lastContainerBunVersion)();
     const current = await status(await deps.statusDeps({ action: "status" }));
-    showFixes(fixItem, current);
+    showFixes(fixItem, fixNotices, current);
     return current;
   };
 
@@ -180,7 +191,7 @@ export function activate(context: vscode.ExtensionContext): void {
         const make = buildDispatchDeps(trust, globalStorage, request?.containerBunVersion);
         const response = await dispatch(request, await make());
         if (request?.action === "status" && response.ok)
-          showFixes(fixItem, response.result as StatusResult);
+          showFixes(fixItem, fixNotices, response.result as StatusResult);
         return response;
       },
     ),
