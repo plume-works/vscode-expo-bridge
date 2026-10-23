@@ -241,6 +241,22 @@ export function activate(context: vscode.ExtensionContext): void {
       }
     }),
 
+    vscode.commands.registerCommand("expoBridge.askBeforeEveryBuild", async () => {
+      const hostPath = resolveHostPath();
+      if (!hostPath || !trust.hasCooldown(hostPath)) {
+        void vscode.window.showInformationMessage(
+          "Expo Bridge: every build in this workspace already asks for confirmation.",
+        );
+        return;
+      }
+      const yes = await vscode.window.showWarningMessage(
+        `Ask before every build again in ${hostPath}?`,
+        { modal: true },
+        "Ask again",
+      );
+      if (yes === "Ask again") await trust.clearCooldown(hostPath);
+    }),
+
     vscode.commands.registerCommand("expoBridge.fix", async () => {
       if (fixGate.running) {
         void vscode.window.showInformationMessage("Expo Bridge: a fix is already running.");

@@ -27,7 +27,9 @@ user's consent:
 - **A confirmation before every `build`.** The modal names the profile and states that
   project code will run on the Mac with the user's privileges. Its answers are "Allow
   once", "Allow and don't ask for an hour", and "Allow and don't ask today". A cooldown
-  applies to that workspace only and is stored in `globalState`. No other action prompts beyond trust.
+  applies to that workspace only and is stored in `globalState`; **Expo Bridge: Ask Before
+  Every Build** ends it without touching trust, and revoking trust ends it too. No other
+  action prompts beyond trust.
 - **Nothing the container writes configures the bridge.** Trust, cooldowns, and the token
   are never read from workspace settings, `devcontainer.json`, or any other file the
   container can write.
@@ -44,8 +46,9 @@ user's consent:
   evaluates a project file as code. No error returned to the container quotes the contents
   of a file the host read.
 - **Management commands change nothing on their own.** Setting or clearing the token,
-  managing trust, and the one-click fix take no arguments, return nothing, and act only
-  after the user answers a prompt — even when a container-side extension invokes them.
+  managing trust, asking before every build again, and the one-click fix take no arguments,
+  return nothing, and act only after the user answers a prompt — even when a
+  container-side extension invokes them.
 - **`EXPO_TOKEN` lives in VS Code SecretStorage** on the Mac and is placed in the build's
   environment only. The build can read it, so use a robot-account token scoped to the
   project.
