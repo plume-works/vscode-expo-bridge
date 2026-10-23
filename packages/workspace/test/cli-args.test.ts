@@ -57,6 +57,7 @@ describe("help", () => {
     expect(HELP).toContain(".tmp/expo-bridge/");
     expect(HELP).toContain("newest build artifact");
     expect(HELP).toContain("bunx expo start --dev-client --localhost --port 8081");
+    expect(HELP).toContain("Run it inside the Expo app's workspace folder");
   });
 });
 
