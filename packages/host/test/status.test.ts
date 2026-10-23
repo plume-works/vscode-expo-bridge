@@ -172,19 +172,19 @@ describe("checks", () => {
   test("easCli names the version build would run", async () => {
     expect((await status(deps())).checks.easCli).toEqual({
       ok: true,
-      detail: "eas-cli@latest (not pinned in package.json)",
+      detail: "eas-cli@latest (no cli.version in eas.json)",
     });
     fs.writeFileSync(
-      path.join(hostPath, "package.json"),
-      JSON.stringify({ devDependencies: { "eas-cli": "^16.3.0" } }),
+      path.join(hostPath, "eas.json"),
+      JSON.stringify({ cli: { version: "16.3.0" } }),
     );
-    expect((await status(deps())).checks.easCli).toEqual({ ok: true, detail: "eas-cli@^16.3.0" });
+    expect((await status(deps())).checks.easCli).toEqual({ ok: true, detail: "eas-cli@16.3.0" });
   });
 
-  test("an eas-cli spec that is not a version range fails easCli", async () => {
+  test("a cli.version that is not a version range fails easCli", async () => {
     fs.writeFileSync(
-      path.join(hostPath, "package.json"),
-      JSON.stringify({ devDependencies: { "eas-cli": "github:expo/eas-cli" } }),
+      path.join(hostPath, "eas.json"),
+      JSON.stringify({ cli: { version: "github:expo/eas-cli" } }),
     );
     expect((await status(deps())).checks.easCli.ok).toBe(false);
   });

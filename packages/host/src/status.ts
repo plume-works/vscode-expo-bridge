@@ -123,7 +123,7 @@ function easCliCheck(d: StatusDeps): StatusCheck {
   try {
     const spec = easCliSpec(d.hostPath, d.fileExists);
     return spec === "latest"
-      ? { ok: true, detail: "eas-cli@latest (not pinned in package.json)" }
+      ? { ok: true, detail: "eas-cli@latest (no cli.version in eas.json)" }
       : { ok: true, detail: `eas-cli@${spec}` };
   } catch (e) {
     if (e instanceof EasCliError) return { ok: false, detail: e.message };
