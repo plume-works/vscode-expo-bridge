@@ -13,6 +13,14 @@ both halves:
 - **Workspace** (`plume-works.vscode-expo-bridge-workspace`, `extensionKind: ["workspace"]`)
   runs in the container: it installs the `eas-host` command and bridges it to the host.
 
+Installing the pack from the Extensions view of an open Dev Containers window puts each half
+in its place. A devcontainer that lists the pack in `customizations.vscode.extensions`
+instead installs all three into the container, where the host extension cannot run: the
+Extensions view shows it disabled with **Install Locally**. Click it once per Mac; windows
+already open then offer **Reload Window**. A Codespace installs the listed extensions after
+its window opens, so the workspace extension activates, and `eas-host` appears, only after
+one **Developer: Reload Window**.
+
 The bridge is a consent surface, not a security boundary — see the protocol and threat
 model in `docs/protocol.md`.
 
