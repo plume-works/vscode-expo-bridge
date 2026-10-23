@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { containerBunVersion, parseArgs, UsageError } from "../src/cli-args";
+import { containerBunVersion, HELP, isHelp, parseArgs, UsageError } from "../src/cli-args";
 
 describe("parseArgs", () => {
   test("status, with the container bun version attached", () => {
@@ -21,12 +21,12 @@ describe("parseArgs", () => {
     expect(() => parseArgs(["build"])).toThrow(UsageError);
   });
 
-  test("install requires a path", () => {
+  test("install takes an optional path", () => {
     expect(parseArgs(["install", ".tmp/expo-bridge/a.tar.gz"])).toEqual({
       action: "install",
       artifactRel: ".tmp/expo-bridge/a.tar.gz",
     });
-    expect(() => parseArgs(["install"])).toThrow(UsageError);
+    expect(parseArgs(["install"])).toEqual({ action: "install" });
   });
 
   test("launch and screenshot take no argument", () => {
@@ -37,6 +37,26 @@ describe("parseArgs", () => {
   test("an unknown action is a usage error", () => {
     expect(() => parseArgs(["deploy"])).toThrow(UsageError);
     expect(() => parseArgs([])).toThrow(UsageError);
+  });
+});
+
+describe("help", () => {
+  test("help, --help, and -h ask for it; an action does not", () => {
+    for (const flag of ["help", "--help", "-h"]) expect(isHelp([flag])).toBe(true);
+    expect(isHelp(["status"])).toBe(false);
+    expect(isHelp([])).toBe(false);
+  });
+
+  test("states the action order, the artifact location, and the Metro step", () => {
+    const order = ["status", "build <profile>", "install [path]", "launch", "screenshot"].map((a) =>
+      HELP.indexOf(`  eas-host ${a}`),
+    );
+    expect(order.every((i) => i >= 0)).toBe(true);
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+    expect(HELP).toContain("artifactRel");
+    expect(HELP).toContain(".tmp/expo-bridge/");
+    expect(HELP).toContain("newest build artifact");
+    expect(HELP).toContain("bunx expo start --dev-client --localhost --port 8081");
   });
 });
 

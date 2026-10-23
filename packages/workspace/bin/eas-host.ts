@@ -6,20 +6,24 @@ import {
   SOCKET_PATH,
   type StatusResult,
 } from "@plume-works/expo-bridge-protocol";
-import { containerBunVersion, parseArgs, UsageError } from "../src/cli-args";
+import { containerBunVersion, HELP, isHelp, parseArgs, UsageError } from "../src/cli-args";
 import { encodeRequest, LineDecoder, type Frame } from "../src/wire";
 
 /**
- * Run one action over the bridge socket. Exit codes: 0 success, 1 the action failed, 2 a
+ * Run one action over the bridge socket, or print the help. Exit codes: 0 success, 1 the action failed, 2 a
  * usage error, 3 the bridge is unavailable (no socket, or `status` reports unavailable or
  * another protocol version).
  * The final result prints as JSON on stdout; build log lines stream to stderr so stdout
  * stays a single parseable object.
  */
 async function main(): Promise<number> {
+  const argv = process.argv.slice(2);
+  if (isHelp(argv)) {
+    process.stdout.write(HELP + "\n");
+    return 0;
+  }
   let request;
   try {
-    const argv = process.argv.slice(2);
     const bun =
       argv[0] === "status"
         ? containerBunVersion((file, args) => execFileSync(file, args, { encoding: "utf8" }))

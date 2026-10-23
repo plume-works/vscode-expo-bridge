@@ -1,9 +1,10 @@
-import type { Request, Response } from "@plume-works/expo-bridge-protocol";
+import type { Response } from "@plume-works/expo-bridge-protocol";
+import type { CliRequest } from "./cli-args";
 
 /** Frames on the container socket: a log line while a build runs, then one final response. */
 export type Frame = { kind: "log"; line: string } | { kind: "response"; response: Response };
 
-export function encodeRequest(req: Request): string {
+export function encodeRequest(req: CliRequest): string {
   return JSON.stringify(req) + "\n";
 }
 

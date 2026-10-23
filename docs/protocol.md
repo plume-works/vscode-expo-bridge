@@ -199,12 +199,24 @@ then copies the PNG to a fresh `.tmp/expo-bridge/screenshot-<ms>.png`.
 ## `eas-host`
 
 ```
-eas-host status | build <profile> | install <path> | launch | screenshot
+eas-host status | build <profile> | install [path] | launch | screenshot | --help
 ```
 
 The workspace extension installs it into `~/.local/bin` when it activates in a workspace
 containing `eas.json`. It prints the result or error object as one line of JSON on stdout
-and build log lines on stderr. Exit codes:
+and build log lines on stderr.
+
+An agent runs the actions in order: `status`, `build <profile>`, `install`, `launch`,
+`screenshot`. `build` returns the artifact's workspace-relative path under
+`.tmp/expo-bridge/` as `artifactRel`. `install` with no path installs the newest build
+artifact there — the newest file that is neither a `build-*.log` nor a `screenshot-*.png`;
+the workspace extension resolves it before forwarding, so the host always receives a path,
+and with no artifact it answers `not-found`. `launch` of a development build loads the
+bundle from Metro on port 8081, so Metro runs in the container first
+(`bunx expo start --dev-client --localhost --port 8081`). `eas-host --help` (also `-h` or
+`help`) prints this sequence on stdout and exits 0.
+
+Exit codes:
 
 | Exit | Meaning                                                                                                                                 |
 | ---- | --------------------------------------------------------------------------------------------------------------------------------------- |
