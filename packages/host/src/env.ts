@@ -58,3 +58,24 @@ export function lookupTool(
   }
   return null;
 }
+
+/**
+ * The binary Dev Containers runs as `docker`: the user-level `dev.containers.dockerPath`
+ * value when set, else `docker` on the login PATH, the Homebrew prefixes, and Docker
+ * Desktop's `~/.docker/bin`. Only the user-level value counts: the container can write
+ * workspace settings.
+ */
+export function lookupDocker(
+  setting: { globalValue?: unknown } | undefined,
+  env: Record<string, string>,
+  exists: (p: string) => boolean,
+  home: string,
+): string | null {
+  const configured = setting?.globalValue;
+  const name = typeof configured === "string" && configured.trim() ? configured.trim() : "docker";
+  if (name.startsWith("/")) return exists(name) ? name : null;
+  if (name.includes("/")) return null;
+  const searched = withHomebrewPath(env);
+  const PATH = [searched.PATH, `${home}/.docker/bin`].filter((p) => p).join(":");
+  return lookupTool(name, { ...searched, PATH }, exists);
+}

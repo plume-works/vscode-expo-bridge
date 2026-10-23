@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { captureLoginEnv, lookupTool, parseEnv0, withHomebrewPath } from "../src/env";
+import { captureLoginEnv, lookupDocker, lookupTool, parseEnv0, withHomebrewPath } from "../src/env";
 
 describe("parseEnv0", () => {
   test("parses a NUL-separated dump", () => {
@@ -68,5 +68,50 @@ describe("lookupTool", () => {
   });
   test("returns null when absent", () => {
     expect(lookupTool("ghost", env, () => false)).toBeNull();
+  });
+});
+
+describe("lookupDocker", () => {
+  const home = "/Users/me";
+  const at =
+    (...paths: string[]) =>
+    (p: string) =>
+      paths.includes(p);
+
+  test("docker on the login PATH", () => {
+    expect(lookupDocker(undefined, { PATH: "/usr/bin" }, at("/usr/bin/docker"), home)).toBe(
+      "/usr/bin/docker",
+    );
+  });
+
+  test("docker under a Homebrew prefix or Docker Desktop's ~/.docker/bin", () => {
+    expect(lookupDocker(undefined, { PATH: "" }, at("/opt/homebrew/bin/docker"), home)).toBe(
+      "/opt/homebrew/bin/docker",
+    );
+    expect(
+      lookupDocker(undefined, { PATH: "/usr/bin" }, at("/Users/me/.docker/bin/docker"), home),
+    ).toBe("/Users/me/.docker/bin/docker");
+  });
+
+  test("the user-level dev.containers.dockerPath wins, as a path or a name", () => {
+    const env = { PATH: "/usr/bin" };
+    const exists = at("/usr/bin/docker", "/usr/bin/podman", "/opt/docker");
+    expect(lookupDocker({ globalValue: "/opt/docker" }, env, exists, home)).toBe("/opt/docker");
+    expect(lookupDocker({ globalValue: "podman" }, env, exists, home)).toBe("/usr/bin/podman");
+    expect(lookupDocker({ globalValue: "/opt/missing" }, env, exists, home)).toBeNull();
+  });
+
+  test("a workspace-level value is ignored", () => {
+    const setting = { workspaceValue: "/tmp/evil", workspaceFolderValue: "/tmp/evil" } as {
+      globalValue?: unknown;
+    };
+    expect(
+      lookupDocker(setting, { PATH: "/usr/bin" }, at("/usr/bin/docker", "/tmp/evil"), home),
+    ).toBe("/usr/bin/docker");
+  });
+
+  test("null when docker is nowhere, or the value is a relative path", () => {
+    expect(lookupDocker(undefined, { PATH: "/usr/bin" }, at(), home)).toBeNull();
+    expect(lookupDocker({ globalValue: "bin/docker" }, {}, at("bin/docker"), home)).toBeNull();
   });
 });
