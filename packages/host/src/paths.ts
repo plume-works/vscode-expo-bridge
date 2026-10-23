@@ -23,6 +23,30 @@ export function isWithin(root: string, child: string): boolean {
 }
 
 /**
+ * Walk every component of `abs` below `root`, which must contain it, and reject the first
+ * that is a symlink or does not exist. `root` itself is not checked.
+ */
+export function rejectSymlinksBelow(
+  root: string,
+  abs: string,
+  lstat: (p: string) => fs.Stats = fs.lstatSync,
+): void {
+  let current = root;
+  for (const part of path.relative(root, abs).split(path.sep)) {
+    if (part === "" || part === ".") continue;
+    if (part === "..") throw new PathError("path-escape", "path escapes the workspace");
+    current = path.join(current, part);
+    let st: fs.Stats;
+    try {
+      st = lstat(current);
+    } catch {
+      throw new PathError("not-found", "path does not exist");
+    }
+    if (st.isSymbolicLink()) throw new PathError("symlink-rejected", "path component is a symlink");
+  }
+}
+
+/**
  * Resolve a workspace-relative path and reject it when any component is a symlink or the
  * result leaves `root`. Returns the real absolute path. Every component must exist.
  */
@@ -38,21 +62,7 @@ export function resolveWithin(
   const joined = path.resolve(root, rel);
   if (!isWithin(root, joined)) throw new PathError("path-escape", "path escapes the workspace");
 
-  // Walk every component from the workspace root down; reject the first that is a symlink.
-  const rootReal = root;
-  let current = rootReal;
-  for (const part of path.relative(rootReal, joined).split(path.sep)) {
-    if (part === "" || part === ".") continue;
-    if (part === "..") throw new PathError("path-escape", "path escapes the workspace");
-    current = path.join(current, part);
-    let st: fs.Stats;
-    try {
-      st = deps.lstat(current);
-    } catch {
-      throw new PathError("not-found", "path does not exist");
-    }
-    if (st.isSymbolicLink()) throw new PathError("symlink-rejected", "path component is a symlink");
-  }
+  rejectSymlinksBelow(root, joined, deps.lstat);
   const real = deps.realpath(joined);
   if (!isWithin(root, real)) throw new PathError("path-escape", "path escapes the workspace");
   return real;
