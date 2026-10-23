@@ -59,8 +59,8 @@ function tailLog(logPath: string, onLine: (line: string) => void): () => void {
   };
 }
 
-function newestBuildLog(workspaceRoot: string, since: number): string | null {
-  const dir = path.join(workspaceRoot, WRITE_DIR_REL);
+function newestBuildLog(folder: string, since: number): string | null {
+  const dir = path.join(folder, WRITE_DIR_REL);
   if (!fs.existsSync(dir)) return null;
   const logs = fs
     .readdirSync(dir)
@@ -71,22 +71,26 @@ function newestBuildLog(workspaceRoot: string, since: number): string | null {
   return logs.length ? path.join(dir, logs[0]!.f) : null;
 }
 
+/** The container paths of this window's workspace folders, as VS Code names them. */
+function workspaceFolders(): string[] {
+  return (vscode.workspace.workspaceFolders ?? []).map((f) => f.uri.fsPath);
+}
+
 async function handleRequest(
   cliRequest: CliRequest,
-  workspaceRoot: string | undefined,
   emit: (frame: { kind: "log"; line: string } | { kind: "response"; response: Response }) => void,
 ): Promise<void> {
-  const resolved = resolveRequest(cliRequest, workspaceRoot);
+  const resolved = resolveRequest(cliRequest, workspaceFolders());
   if ("error" in resolved) {
     emit({ kind: "response", response: { ok: false, error: resolved.error } });
     return;
   }
   const request: Request = resolved.request;
   let stopTail: (() => void) | undefined;
-  if (request.action === "build" && workspaceRoot) {
+  if (request.action === "build") {
     const since = Date.now();
     const poll = setInterval(() => {
-      const log = newestBuildLog(workspaceRoot, since);
+      const log = newestBuildLog(request.folder, since);
       if (log) {
         clearInterval(poll);
         stopTail = tailLog(log, (line) => emit({ kind: "log", line }));
@@ -117,8 +121,6 @@ export function activate(context: vscode.ExtensionContext): void {
     void vscode.window.showWarningMessage(`Expo Bridge: could not install eas-host: ${String(e)}`);
   }
 
-  const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-
   // One socket per window: several windows can share a container. See docs/protocol.md.
   const id = randomBytes(8).toString("hex");
   const activatedAt = Date.now();
@@ -129,7 +131,7 @@ export function activate(context: vscode.ExtensionContext): void {
       writeEntry(SOCKET_DIR, id, {
         pid: process.pid,
         activatedAt,
-        folders: (vscode.workspace.workspaceFolders ?? []).map((f) => f.uri.fsPath),
+        folders: workspaceFolders(),
       });
     } catch (e) {
       warn(e);
@@ -143,7 +145,7 @@ export function activate(context: vscode.ExtensionContext): void {
     ) => conn.write(encodeFrame(frame));
     conn.on("data", (chunk) => {
       for (const request of decoder.feed(chunk.toString("utf8"))) {
-        void handleRequest(request, workspaceRoot, emit).then(() => conn.end());
+        void handleRequest(request, emit).then(() => conn.end());
       }
     });
     conn.on("error", () => conn.destroy());

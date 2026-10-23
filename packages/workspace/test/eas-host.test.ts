@@ -114,7 +114,12 @@ describe("eas-host CLI", () => {
             kind: "response",
             response: {
               ok: true,
-              result: { protocolVersion: 2, available: true, checks: {} as never },
+              result: {
+                protocolVersion: 2,
+                available: true,
+                folderHostPath: "",
+                checks: {} as never,
+              },
             },
           }),
         );
@@ -132,7 +137,12 @@ describe("eas-host CLI", () => {
             kind: "response",
             response: {
               ok: true,
-              result: { protocolVersion: 2, available: false, checks: {} as never },
+              result: {
+                protocolVersion: 2,
+                available: false,
+                folderHostPath: "",
+                checks: {} as never,
+              },
             },
           }),
         );
@@ -150,7 +160,12 @@ describe("eas-host CLI", () => {
             kind: "response",
             response: {
               ok: true,
-              result: { protocolVersion: 1, available: true, checks: {} as never },
+              result: {
+                protocolVersion: 1,
+                available: true,
+                folderHostPath: "",
+                checks: {} as never,
+              },
             },
           }),
         );
