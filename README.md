@@ -58,7 +58,8 @@ minor line.
 Pushing a `vX.Y.Z` tag runs `.github/workflows/release.yml`. It refuses a tag that differs
 from the extensions' version, packages an odd minor as a pre-release, and, once a reviewer
 of the `release` environment approves, publishes to the Visual Studio Marketplace (Microsoft
-Entra ID through GitHub OIDC, no stored token) and Open VSX, then creates the GitHub Release.
+Entra ID through GitHub OIDC) and Open VSX (trusted publishing through GitHub OIDC), with no
+stored token, then creates the GitHub Release.
 
 ```bash
 git tag v0.1.9 && git push origin v0.1.9   # on main, at the commit whose version is 0.1.9
