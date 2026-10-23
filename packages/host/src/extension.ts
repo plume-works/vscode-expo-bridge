@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as vscode from "vscode";
 import type { BuildDecision, Prompts, TrustDecision } from "./trust";
-import { TrustStore } from "./trust";
+import { BUILD_ANSWERS, TrustStore } from "./trust";
 import { dispatch, type DispatchDeps } from "./dispatch";
 import { decodeHostPath } from "./hostpath";
 import { captureLoginEnv } from "./env";
@@ -32,14 +32,10 @@ const prompts = (): Prompts => ({
     const choice = await vscode.window.showWarningMessage(
       `Run the "${profile}" Expo build on this Mac? Project code will run with your privileges.`,
       { modal: true },
-      "Allow once",
-      "Don't ask for an hour",
-      "Don't ask today",
+      ...Object.values(BUILD_ANSWERS),
     );
-    if (choice === "Allow once") return "once";
-    if (choice === "Don't ask for an hour") return "hour";
-    if (choice === "Don't ask today") return "today";
-    return "decline";
+    const answer = Object.entries(BUILD_ANSWERS).find(([, label]) => label === choice);
+    return answer ? (answer[0] as BuildDecision) : "decline";
   },
 });
 

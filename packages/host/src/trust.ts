@@ -16,6 +16,13 @@ export interface SecretStore {
 export type TrustDecision = "allow" | "decline";
 export type BuildDecision = "once" | "hour" | "today" | "decline";
 
+/** The build confirmation's buttons; each one allows the build. */
+export const BUILD_ANSWERS: Record<Exclude<BuildDecision, "decline">, string> = {
+  once: "Allow once",
+  hour: "Allow and don't ask for an hour",
+  today: "Allow and don't ask today",
+};
+
 /** Shown to the user; the caller maps the modal's buttons to these. */
 export interface Prompts {
   trust(hostPath: string): Thenable<TrustDecision | undefined>;

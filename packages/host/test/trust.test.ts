@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import type { BuildDecision, Prompts, SecretStore, TrustDecision } from "../src/trust";
-import { TrustStore } from "../src/trust";
+import { BUILD_ANSWERS, TrustStore } from "../src/trust";
 
 class FakeMemento {
   private store = new Map<string, unknown>();
@@ -165,5 +165,15 @@ describe("token", () => {
     expect(await store.getToken()).toBe("abc");
     await store.clearToken();
     expect(await store.getToken()).toBeUndefined();
+  });
+});
+
+describe("BUILD_ANSWERS", () => {
+  test("every build confirmation answer says it allows the build", () => {
+    expect(Object.values(BUILD_ANSWERS)).toEqual([
+      "Allow once",
+      "Allow and don't ask for an hour",
+      "Allow and don't ask today",
+    ]);
   });
 });
