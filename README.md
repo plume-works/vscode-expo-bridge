@@ -21,6 +21,10 @@ already open then offer **Reload Window**. A Codespace installs the listed exten
 its window opens, so the workspace extension activates, and `eas-host` appears, only after
 one **Developer: Reload Window**.
 
+A window may hold several workspace folders, and several windows may share one container:
+`eas-host` reaches the window it runs in and acts on the workspace folder containing its
+working directory, so run it inside the Expo app's folder.
+
 The bridge is a consent surface, not a security boundary — see the protocol and threat
 model in `docs/protocol.md`.
 
