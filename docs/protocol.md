@@ -25,9 +25,9 @@ user's consent:
   prompting again until the decision is revoked with **Expo Bridge: Manage Trusted
   Workspaces**, which lists and revokes allowed and declined workspaces alike.
 - **A confirmation before every `build`.** The modal names the profile and states that
-  project code will run on the Mac with the user's privileges. Its answers are "Allow once",
-  "Don't ask for an hour", and "Don't ask today". A cooldown applies to that workspace only
-  and is stored in `globalState`. No other action prompts beyond trust.
+  project code will run on the Mac with the user's privileges. Its answers are "Allow
+  once", "Allow and don't ask for an hour", and "Allow and don't ask today". A cooldown
+  applies to that workspace only and is stored in `globalState`. No other action prompts beyond trust.
 - **Nothing the container writes configures the bridge.** Trust, cooldowns, and the token
   are never read from workspace settings, `devcontainer.json`, or any other file the
   container can write.
