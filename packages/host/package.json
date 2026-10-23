@@ -3,7 +3,7 @@
   "displayName": "Expo Bridge (Host)",
   "description": "Mac-side half of the Expo Bridge: builds, installs, launches, and screenshots an Expo iOS app for a devcontainer.",
   "publisher": "plume-works",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -48,7 +48,7 @@
   },
   "scripts": {
     "build": "bun build src/extension.ts --outdir dist --target node --format cjs --external vscode",
-    "package": "bun run build && vsce package --no-dependencies --out vscode-expo-bridge-host.vsix"
+    "package": "bun run build && vsce package --no-dependencies $VSCE_PACKAGE_FLAGS --out vscode-expo-bridge-host.vsix"
   },
   "dependencies": {
     "@plume-works/expo-bridge-protocol": "workspace:*"

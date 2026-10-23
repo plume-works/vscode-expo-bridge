@@ -24,7 +24,7 @@ packages/
   host/        the ui-kind host extension
   workspace/   the workspace-kind extension and the eas-host CLI
   pack/        the extension pack listing both extensions
-  release/     the version bump script
+  release/     the version bump and release tag check
 ```
 
 ## Development
@@ -44,3 +44,14 @@ The pack and both extensions always carry the same version. An odd minor is a pr
 line and an even minor a release, since the galleries accept only `major.minor.patch`.
 Every change bumps the patch with `bun run bump`; `bun run bump <version>` starts a new
 minor line.
+
+## Releasing
+
+Pushing a `vX.Y.Z` tag runs `.github/workflows/release.yml`. It refuses a tag that differs
+from the extensions' version, packages an odd minor as a pre-release, and, once a reviewer
+of the `release` environment approves, publishes to the Visual Studio Marketplace (Microsoft
+Entra ID through GitHub OIDC, no stored token) and Open VSX, then creates the GitHub Release.
+
+```bash
+git tag v0.1.9 && git push origin v0.1.9   # on main, at the commit whose version is 0.1.9
+```

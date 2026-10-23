@@ -1,0 +1,95 @@
+name: Release
+
+on:
+  push:
+    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      channel: ${{ steps.check.outputs.channel }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.3
+          no-cache: true
+      - run: bun install --frozen-lockfile
+      - name: Check the tag against the extensions' version
+        id: check
+        run: |
+          channel=$(bun packages/release/src/release.ts "$GITHUB_REF_NAME")
+          echo "channel=$channel" >> "$GITHUB_OUTPUT"
+      - name: Lint
+        run: bun run lint
+      - name: Typecheck
+        run: bun run typecheck
+      - name: Test
+        run: bun test
+      - name: Package all three VSIX
+        env:
+          VSCE_PACKAGE_FLAGS: ${{ steps.check.outputs.channel == 'pre-release' && '--pre-release' || '' }}
+        run: bun run package
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: vsix
+          path: packages/*/*.vsix
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: write
+      id-token: write
+    env:
+      PRE_RELEASE: ${{ needs.build.outputs.channel == 'pre-release' && '--pre-release' || '' }}
+      HOST_VSIX: vsix/host/vscode-expo-bridge-host.vsix
+      WORKSPACE_VSIX: vsix/workspace/vscode-expo-bridge-workspace.vsix
+      PACK_VSIX: vsix/pack/vscode-expo-bridge.vsix
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.3
+          no-cache: true
+      - run: bun install --frozen-lockfile
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: vsix
+          path: vsix
+      - uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          allow-no-subscriptions: true
+      # The pack's members go first, so the pack never lists a missing extension.
+      - name: Publish to the Visual Studio Marketplace
+        run: |
+          # shellcheck disable=SC2086 # PRE_RELEASE is empty or one flag
+          bunx vsce publish --packagePath "$HOST_VSIX" "$WORKSPACE_VSIX" "$PACK_VSIX" \
+            --skip-duplicate --azure-credential $PRE_RELEASE
+      - name: Publish to Open VSX
+        env:
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}
+        run: |
+          for vsix in "$HOST_VSIX" "$WORKSPACE_VSIX" "$PACK_VSIX"; do
+            bunx ovsx publish "$vsix" --skip-duplicate
+          done
+      - name: Create the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # shellcheck disable=SC2046 # one optional flag
+          gh release create "$GITHUB_REF_NAME" "$HOST_VSIX" "$WORKSPACE_VSIX" "$PACK_VSIX" \
+            --repo "$GITHUB_REPOSITORY" --verify-tag --generate-notes \
+            $([ -n "$PRE_RELEASE" ] && echo --prerelease)
