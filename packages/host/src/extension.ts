@@ -4,9 +4,10 @@ import * as vscode from "vscode";
 import type { BuildDecision, Prompts, TrustDecision } from "./trust";
 import { BUILD_ANSWERS, TrustStore } from "./trust";
 import { dispatch, type DispatchDeps } from "./dispatch";
-import { decodeHostPath } from "./hostpath";
-import { captureLoginEnv } from "./env";
+import { decodeHostPath, type ResolvedHost } from "./hostpath";
+import { captureLoginEnv, lookupDocker } from "./env";
 import { realRunner } from "./exec";
+import { resolveFolder, type FolderMapping } from "./folder";
 import { FixNotices, fixSummary, planFixes } from "./fix";
 import { FixGate, runCommands, type RunCommand } from "./fixrun";
 import type { InstalledApp } from "./install";
@@ -28,9 +29,9 @@ const prompts = (): Prompts => ({
     );
     return choice === "Allow" ? "allow" : "decline";
   },
-  async build(_hostPath, profile): Promise<BuildDecision | undefined> {
+  async build(_hostPath, profile, folderHostPath): Promise<BuildDecision | undefined> {
     const choice = await vscode.window.showWarningMessage(
-      `Run the "${profile}" Expo build on this Mac? Project code will run with your privileges.`,
+      `Run the "${profile}" Expo build on this Mac? Project code will run with your privileges.\n\n${folderHostPath}`,
       { modal: true },
       ...Object.values(BUILD_ANSWERS),
     );
@@ -99,12 +100,15 @@ function closed(terminal: vscode.Terminal): Promise<void> {
   });
 }
 
-/** The host path of this window's own remote authority — never the container's claim. */
-function resolveHostPath(): string | null {
+/** This window's own remote authority, decoded — never the container's claim. */
+function resolveHost(): ResolvedHost | null {
   const folder = vscode.workspace.workspaceFolders?.[0];
-  if (!folder) return null;
-  const resolved = decodeHostPath(folder.uri.authority);
-  return resolved?.hostPath ?? null;
+  return folder ? decodeHostPath(folder.uri.authority) : null;
+}
+
+/** The host path of this window's own remote authority. */
+function resolveHostPath(): string | null {
+  return resolveHost()?.hostPath ?? null;
 }
 
 function buildDispatchDeps(
@@ -113,13 +117,25 @@ function buildDispatchDeps(
   containerBunVersion: string | undefined,
 ): () => Promise<DispatchDeps> {
   return async () => {
-    const hostPath = resolveHostPath();
+    const host = resolveHost();
+    const hostPath = host?.hostPath ?? null;
     const env = await captureLoginEnv();
     const fileExists = (p: string) => fs.existsSync(p);
     const token = hostPath ? await trust.getToken() : undefined;
 
-    const simContext = () => ({
-      hostPath: hostPath!,
+    // A request may name only a folder of this window, under this window's authority.
+    const mapFolder = async (folder: string): Promise<FolderMapping> => {
+      if (!host) return { ok: false, detail: "no resolvable host path" };
+      const windowFolders = (vscode.workspace.workspaceFolders ?? [])
+        .filter((f) => f.uri.authority === host.authority)
+        .map((f) => f.uri.path);
+      const dockerPath = vscode.workspace.getConfiguration("dev.containers").inspect("dockerPath");
+      const docker = lookupDocker(dockerPath, env, fileExists, os.homedir());
+      return resolveFolder(folder, windowFolders, host, { docker, runner: realRunner, env });
+    };
+
+    const simContext = (folderHostPath: string) => ({
+      folderHostPath,
       globalStorage,
       env,
       runner: realRunner,
@@ -131,10 +147,11 @@ function buildDispatchDeps(
 
     return {
       hostPath,
-      statusDeps: async () => ({
+      mapFolder,
+      statusDeps: async (_req, folder) => ({
         platform: process.platform,
-        hostPath: hostPath ?? "",
         hostPathExists: !!hostPath && fs.existsSync(hostPath),
+        folder,
         trusted: hostPath ? trust.listTrusted().includes(hostPath) : false,
         hasToken: !!(await trust.getToken()),
         containerBunVersion,
@@ -143,11 +160,11 @@ function buildDispatchDeps(
         fileExists,
         port8081Forwarded: await portAcceptsConnections(8081, 500),
       }),
-      confirmBuild: async (profile: string) =>
-        hostPath ? trust.confirmBuild(hostPath, profile) : false,
+      confirmBuild: async (profile: string, folderHostPath: string) =>
+        hostPath ? trust.confirmBuild(hostPath, profile, folderHostPath) : false,
       ensureTrusted: async () => (hostPath ? trust.ensureTrusted(hostPath) : false),
-      buildDeps: async () => ({
-        hostPath: hostPath!,
+      buildDeps: async (folderHostPath: string) => ({
+        folderHostPath,
         globalStorage,
         env,
         token: await trust.getToken(),
@@ -165,8 +182,9 @@ export function activate(context: vscode.ExtensionContext): void {
   const globalStorage = context.globalStorageUri.fsPath;
   fs.mkdirSync(globalStorage, { recursive: true });
   const trust = new TrustStore(context.globalState, context.secrets, prompts());
-  // The fix re-checks status itself, so it needs the bun version the container last sent.
+  // The fix re-checks status itself, so it needs what the container's last status sent.
   let lastContainerBunVersion: string | undefined;
+  let lastFolder: string | undefined;
   const fixItem = vscode.window.createStatusBarItem(
     "expoBridge.fixes",
     vscode.StatusBarAlignment.Left,
@@ -178,7 +196,12 @@ export function activate(context: vscode.ExtensionContext): void {
   const fixNotices = new FixNotices();
   const recheck = async () => {
     const deps = await buildDispatchDeps(trust, globalStorage, lastContainerBunVersion)();
-    const current = await status(await deps.statusDeps({ action: "status" }));
+    const folder: FolderMapping = lastFolder
+      ? await deps.mapFolder(lastFolder)
+      : { ok: false, detail: "no status request yet" };
+    const current = await status(
+      await deps.statusDeps({ action: "status", folder: lastFolder ?? "" }, folder),
+    );
     showFixes(fixItem, fixNotices, current);
     return current;
   };
@@ -187,7 +210,10 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand(
       DISPATCH_COMMAND,
       async (request: Request & { containerBunVersion?: string }) => {
-        if (request?.action === "status") lastContainerBunVersion = request.containerBunVersion;
+        if (request?.action === "status") {
+          lastContainerBunVersion = request.containerBunVersion;
+          lastFolder = typeof request.folder === "string" ? request.folder : undefined;
+        }
         const make = buildDispatchDeps(trust, globalStorage, request?.containerBunVersion);
         const response = await dispatch(request, await make());
         if (request?.action === "status" && response.ok)

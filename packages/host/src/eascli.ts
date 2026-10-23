@@ -25,11 +25,11 @@ export function normalizeRange(spec: string): string | null {
 export class EasCliError extends Error {}
 
 /**
- * The eas-cli version `build` runs through `bunx`: `cli.version` in the workspace's
+ * The eas-cli version `build` runs through `bunx`: `cli.version` in the folder's
  * `eas.json`, Expo's own pin for the CLI, else `latest`. Read as JSON only.
  */
-export function easCliSpec(hostPath: string, fileExists: (p: string) => boolean): string {
-  const easJsonPath = path.join(hostPath, "eas.json");
+export function easCliSpec(folderHostPath: string, fileExists: (p: string) => boolean): string {
+  const easJsonPath = path.join(folderHostPath, "eas.json");
   if (!fileExists(easJsonPath)) return "latest";
   let easJson: { cli?: { version?: unknown } };
   try {

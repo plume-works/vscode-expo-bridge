@@ -26,7 +26,12 @@ export const BUILD_ANSWERS: Record<Exclude<BuildDecision, "decline">, string> = 
 /** Shown to the user; the caller maps the modal's buttons to these. */
 export interface Prompts {
   trust(hostPath: string): Thenable<TrustDecision | undefined>;
-  build(hostPath: string, profile: string): Thenable<BuildDecision | undefined>;
+  /** `folderHostPath` is where the build runs: the host path or a folder under it. */
+  build(
+    hostPath: string,
+    profile: string,
+    folderHostPath: string,
+  ): Thenable<BuildDecision | undefined>;
 }
 
 const TRUST_KEY = "expoBridge.trust"; // host path -> "allow" | "decline"
@@ -93,14 +98,18 @@ export class TrustStore {
   /**
    * Gate a build: trust first, then a confirmation unless a live cooldown for this
    * workspace already covers it. "once" never records a cooldown; "hour"/"today" record
-   * one scoped to this host path.
+   * one scoped to this host path, whichever of its folders the build runs in.
    */
-  async confirmBuild(hostPath: string, profile: string): Promise<boolean> {
+  async confirmBuild(
+    hostPath: string,
+    profile: string,
+    folderHostPath: string = hostPath,
+  ): Promise<boolean> {
     if (!(await this.ensureTrusted(hostPath))) return false;
     const until = this.cooldownMap()[hostPath] ?? 0;
     if (until > this.now()) return true;
 
-    const answer = await this.prompts.build(hostPath, profile);
+    const answer = await this.prompts.build(hostPath, profile, folderHostPath);
     if (answer === undefined || answer === "decline") return false;
     if (answer === "hour" || answer === "today") {
       const span = answer === "hour" ? HOUR_MS : endOfTodayMs(this.now()) - this.now();

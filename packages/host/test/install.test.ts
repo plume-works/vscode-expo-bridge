@@ -82,7 +82,7 @@ function runner(
 
 function ctx(partial: Partial<SimContext> = {}): SimContext {
   return {
-    hostPath,
+    folderHostPath: hostPath,
     globalStorage: storage,
     env: { PATH: BINS },
     runner: runner([]),
