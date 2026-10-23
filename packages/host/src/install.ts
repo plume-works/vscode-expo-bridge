@@ -74,30 +74,34 @@ export async function install(artifactRel: string, ctx: SimContext): Promise<Ins
   }
   const dest = path.join(ctx.globalStorage, `install-${ctx.now()}`);
   fs.mkdirSync(dest, { recursive: true });
+  // The unpacked copy is only needed until simctl has installed it.
+  try {
+    // -k keeps existing files (no overwrite); the directory is fresh so every entry is new.
+    // The host tar refuses to follow a link that points outside the destination; the
+    // post-extraction scan below also rejects any symlink that landed in the tree.
+    const tar = lookupTool("tar", ctx.env, ctx.fileExists) ?? "/usr/bin/tar";
+    const r = await ctx.runner.run(tar, ["-xkf", abs, "-C", dest], { env: ctx.env });
+    if (r.code !== 0) {
+      throw new ActionError({ code: "action-failed", message: "failed to unpack the artifact" });
+    }
+    rejectSymlinks(dest);
 
-  // -k keeps existing files (no overwrite); the directory is fresh so every entry is new.
-  // The host tar refuses to follow a link that points outside the destination; the
-  // post-extraction scan below also rejects any symlink that landed in the tree.
-  const tar = lookupTool("tar", ctx.env, ctx.fileExists) ?? "/usr/bin/tar";
-  const r = await ctx.runner.run(tar, ["-xkf", abs, "-C", dest], { env: ctx.env });
-  if (r.code !== 0) {
-    throw new ActionError({ code: "action-failed", message: "failed to unpack the artifact" });
+    const appDir = findApp(dest);
+    if (!appDir) throw new ActionError({ code: "not-found", message: "no .app in the artifact" });
+    const { bundleId, devScheme } = await readInfoPlist(appDir, ctx);
+
+    const udid = await simulator(ctx);
+    const install = await ctx.runner.run(xcrun(ctx), ["simctl", "install", udid, appDir], {
+      env: ctx.env,
+    });
+    if (install.code !== 0) {
+      throw new ActionError({ code: "action-failed", message: "simctl install failed" });
+    }
+    ctx.setLastApp({ bundleId, devScheme });
+    return { bundleIdentifier: bundleId };
+  } finally {
+    fs.rmSync(dest, { recursive: true, force: true });
   }
-  rejectSymlinks(dest);
-
-  const appDir = findApp(dest);
-  if (!appDir) throw new ActionError({ code: "not-found", message: "no .app in the artifact" });
-  const { bundleId, devScheme } = await readInfoPlist(appDir, ctx);
-
-  const udid = await simulator(ctx);
-  const install = await ctx.runner.run(xcrun(ctx), ["simctl", "install", udid, appDir], {
-    env: ctx.env,
-  });
-  if (install.code !== 0) {
-    throw new ActionError({ code: "action-failed", message: "simctl install failed" });
-  }
-  ctx.setLastApp({ bundleId, devScheme });
-  return { bundleIdentifier: bundleId };
 }
 
 /**

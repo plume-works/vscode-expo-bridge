@@ -174,6 +174,17 @@ describe("install", () => {
     expect(lastApp?.devScheme).toBeUndefined();
   });
 
+  test("leaves nothing in private storage after installing", async () => {
+    await install(writeArtifact(), ctx({ runner: runner([]) }));
+    expect(fs.readdirSync(storage)).toEqual([]);
+  });
+
+  test("leaves nothing in private storage when an install fails", async () => {
+    const failing = runner([], { code: 1, stdout: "", stderr: "no device" });
+    await expect(install(writeArtifact(), ctx({ runner: failing }))).rejects.toThrow();
+    expect(fs.readdirSync(storage)).toEqual([]);
+  });
+
   test("reports a simctl install failure", async () => {
     const rel = writeArtifact();
     try {

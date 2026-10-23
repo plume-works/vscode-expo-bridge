@@ -70,46 +70,51 @@ export async function build(profile: string, d: BuildDeps): Promise<BuildResult>
 
   const buildDir = path.join(d.globalStorage, `build-${d.now()}`);
   fs.mkdirSync(buildDir, { recursive: true });
-
-  const env: Record<string, string> = {
-    ...d.env,
-    EAS_NO_VCS: "1",
-    EAS_LOCAL_BUILD_ARTIFACTS_DIR: buildDir,
-    CI: "1",
-  };
-  if (d.token) env.EXPO_TOKEN = d.token;
-
-  const outDir = path.join(d.hostPath, WRITE_DIR_REL);
-  fs.mkdirSync(outDir, { recursive: true });
-  const { fd: logFd, written: logPath } = openFreshUnique(
-    path.join(outDir, `build-${d.now()}.log`),
-  );
+  // The private copy is only needed until the artifact is copied into the workspace.
   let r;
-  try {
-    r = await d.runner.run(
-      bun,
-      [
-        "x",
-        `eas-cli@${spec}`,
-        "build",
-        "--local",
-        "--non-interactive",
-        "-p",
-        "ios",
-        "--profile",
-        profile,
-      ],
-      { env, cwd: d.hostPath, onOutput: (chunk) => fs.writeSync(logFd, chunk) },
-    );
-  } finally {
-    fs.closeSync(logFd);
-  }
-
-  const artifact = fs.readdirSync(buildDir).find((f) => !f.startsWith("."));
   let artifactRel = "";
-  if (artifact) {
-    const dest = copyFresh(path.join(buildDir, artifact), path.join(outDir, artifact));
-    artifactRel = path.relative(d.hostPath, dest);
+  let logPath: string;
+  try {
+    const env: Record<string, string> = {
+      ...d.env,
+      EAS_NO_VCS: "1",
+      EAS_LOCAL_BUILD_ARTIFACTS_DIR: buildDir,
+      CI: "1",
+    };
+    if (d.token) env.EXPO_TOKEN = d.token;
+
+    const outDir = path.join(d.hostPath, WRITE_DIR_REL);
+    fs.mkdirSync(outDir, { recursive: true });
+    const fresh = openFreshUnique(path.join(outDir, `build-${d.now()}.log`));
+    const logFd = fresh.fd;
+    logPath = fresh.written;
+    try {
+      r = await d.runner.run(
+        bun,
+        [
+          "x",
+          `eas-cli@${spec}`,
+          "build",
+          "--local",
+          "--non-interactive",
+          "-p",
+          "ios",
+          "--profile",
+          profile,
+        ],
+        { env, cwd: d.hostPath, onOutput: (chunk) => fs.writeSync(logFd, chunk) },
+      );
+    } finally {
+      fs.closeSync(logFd);
+    }
+
+    const artifact = fs.readdirSync(buildDir).find((f) => !f.startsWith("."));
+    if (artifact) {
+      const dest = copyFresh(path.join(buildDir, artifact), path.join(outDir, artifact));
+      artifactRel = path.relative(d.hostPath, dest);
+    }
+  } finally {
+    fs.rmSync(buildDir, { recursive: true, force: true });
   }
 
   return {
