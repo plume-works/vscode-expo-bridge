@@ -3,7 +3,7 @@
   "displayName": "Expo Bridge (Workspace)",
   "description": "Container-side half of the Expo Bridge: installs the eas-host command and bridges it to the Mac host.",
   "publisher": "plume-works",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -24,7 +24,7 @@
   ],
   "scripts": {
     "build": "bun build src/extension.ts --outdir dist --target node --format cjs --external vscode && bun build bin/eas-host.ts --outdir dist --target node --format cjs",
-    "package": "bun run build && vsce package --no-dependencies --out vscode-expo-bridge-workspace.vsix"
+    "package": "bun run build && vsce package --no-dependencies $VSCE_PACKAGE_FLAGS --out vscode-expo-bridge-workspace.vsix"
   },
   "dependencies": {
     "@plume-works/expo-bridge-protocol": "workspace:*"

@@ -4,7 +4,7 @@ import * as path from "node:path";
 /** The extensions that ship together; they always carry the same version. */
 export const EXTENSIONS = ["pack", "host", "workspace"];
 
-const SEMVER_RE = /^(\d+)\.(\d+)\.(\d+)$/;
+export const SEMVER_RE = /^(\d+)\.(\d+)\.(\d+)$/;
 
 export function bumpPatch(version: string): string {
   const m = SEMVER_RE.exec(version);
@@ -12,14 +12,24 @@ export function bumpPatch(version: string): string {
   return `${m[1]}.${m[2]}.${Number(m[3]) + 1}`;
 }
 
-/** Set every extension to `next`, or to the next patch when omitted; returns the version. */
-export function bump(root: string, next?: string): string {
+function readExtensions(root: string) {
   const files = EXTENSIONS.map((p) => path.join(root, "packages", p, "package.json"));
   const pkgs = files.map((f) => JSON.parse(fs.readFileSync(f, "utf8")) as { version: string });
   const versions = new Set(pkgs.map((p) => p.version));
   if (versions.size !== 1)
     throw new Error(`extension versions differ: ${[...versions].join(", ")}`);
-  const version = next ?? bumpPatch(pkgs[0]!.version);
+  return { files, pkgs, version: pkgs[0]!.version };
+}
+
+/** The version every extension carries; throws when they differ. */
+export function sharedVersion(root: string): string {
+  return readExtensions(root).version;
+}
+
+/** Set every extension to `next`, or to the next patch when omitted; returns the version. */
+export function bump(root: string, next?: string): string {
+  const { files, pkgs, version: current } = readExtensions(root);
+  const version = next ?? bumpPatch(current);
   if (!SEMVER_RE.test(version)) throw new Error(`not a major.minor.patch version: ${version}`);
   files.forEach((f, i) => {
     pkgs[i]!.version = version;
