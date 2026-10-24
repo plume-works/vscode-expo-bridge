@@ -1,10 +1,13 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import type { BuildResult, ProtocolError } from "@plume-works/expo-bridge-protocol";
+import type { BuildReason, BuildResult, ProtocolError } from "@plume-works/expo-bridge-protocol";
 import { WRITE_DIR_REL } from "@plume-works/expo-bridge-protocol";
+import { BuildCache } from "./buildcache";
+import { buildKey } from "./buildkey";
 import type { Runner } from "./exec";
 import { EasCliError, easCliSpec } from "./eascli";
 import { lookupTool } from "./env";
+import { projectFingerprint } from "./fingerprint";
 import { readJsonFile } from "./jsonfile";
 import { copyFresh, openFreshUnique } from "./paths";
 
@@ -17,10 +20,14 @@ export class BuildError extends Error {
 const PROFILE_RE = /^[A-Za-z0-9_-]+$/;
 
 export interface BuildDeps {
+  /** The window's trusted host path, under which the folder's build cache lives. */
+  hostPath: string;
   /** The Mac path of the request's folder: the build runs and writes there. */
   folderHostPath: string;
   /** The host extension's private global storage, where the artifact is built first. */
   globalStorage: string;
+  /** The host extension's version, part of every cache key. */
+  hostVersion: string;
   env: Record<string, string>;
   token: string | undefined;
   runner: Runner;
@@ -30,6 +37,11 @@ export interface BuildDeps {
   now: () => number;
 }
 
+export interface BuildOptions {
+  /** Skip the lookup and build in full; the result is still stored. */
+  clean?: boolean;
+}
+
 /** Profiles declared in the folder's `eas.json` `build` map. */
 export function profilesOf(easJson: unknown): string[] {
   const build = (easJson as { build?: Record<string, unknown> })?.build;
@@ -37,12 +49,14 @@ export function profilesOf(easJson: unknown): string[] {
 }
 
 /**
- * Run `eas build --local` through `bunx eas-cli@<spec>` for a simulator profile and leave
- * the artifact and log under `.tmp/expo-bridge/`. Validates the profile against
- * `eas.json`, never runs `eas init`, and builds into private global storage before copying
- * into the folder under the fresh-write rule. The caller has already gated trust and the confirmation.
+ * Reuse the folder's artifact whose cache key matches, else run `eas build --local` and store
+ * its result. The caller has gated trust and the confirmation; see docs/protocol.md `build`.
  */
-export async function build(profile: string, d: BuildDeps): Promise<BuildResult> {
+export async function build(
+  profile: string,
+  d: BuildDeps,
+  opts: BuildOptions = {},
+): Promise<BuildResult> {
   if (!d.confirmed)
     throw new BuildError({ code: "build-declined", message: "build not confirmed" });
   if (!PROFILE_RE.test(profile)) {
@@ -69,28 +83,68 @@ export async function build(profile: string, d: BuildDeps): Promise<BuildResult>
     throw e;
   }
 
-  const buildDir = path.join(d.globalStorage, `build-${d.now()}`);
-  fs.mkdirSync(buildDir, { recursive: true });
-  // The private copy is only needed until the artifact is copied into the workspace.
-  let r;
-  let artifactRel = "";
-  let logPath: string;
-  try {
-    const env: Record<string, string> = {
-      ...d.env,
-      EAS_NO_VCS: "1",
-      EAS_LOCAL_BUILD_ARTIFACTS_DIR: buildDir,
-      CI: "1",
-    };
-    if (d.token) env.EXPO_TOKEN = d.token;
+  const outDir = path.join(d.folderHostPath, WRITE_DIR_REL);
+  fs.mkdirSync(outDir, { recursive: true });
+  const fresh = openFreshUnique(path.join(outDir, `build-${d.now()}.log`));
+  const logFd = fresh.fd;
+  const logRel = path.relative(d.folderHostPath, fresh.written);
+  const log = (line: string) => fs.writeSync(logFd, `expo-bridge: ${line}\n`);
+  const tar = lookupTool("tar", d.env, d.fileExists) ?? "/usr/bin/tar";
+  const cache = new BuildCache(d.globalStorage, d.hostPath, d.folderHostPath, {
+    runner: d.runner,
+    env: d.env,
+    tar,
+  });
+  const cacheKey = async (): Promise<string | null> => {
+    const fingerprint = await projectFingerprint(d.folderHostPath, d);
+    log(`fingerprint ${fingerprint ?? "unavailable"}`);
+    if (!fingerprint) return null;
+    const key = await buildKey(d.folderHostPath, fingerprint, profile, {
+      ...d,
+      bun,
+      easCliSpec: spec,
+    });
+    log(`cache key ${key ?? "unavailable"}`);
+    return key;
+  };
 
-    const outDir = path.join(d.folderHostPath, WRITE_DIR_REL);
-    fs.mkdirSync(outDir, { recursive: true });
-    const fresh = openFreshUnique(path.join(outDir, `build-${d.now()}.log`));
-    const logFd = fresh.fd;
-    logPath = fresh.written;
+  try {
+    let key: string | null = null;
+    let reason: BuildReason = "clean-requested";
+    if (opts.clean) {
+      log("clean build requested");
+    } else {
+      key = await cacheKey();
+      const hit = key ? cache.lookup(key) : null;
+      if (hit) {
+        const dest = copyFresh(hit.artifact, path.join(outDir, `build-${d.now()}.tar.gz`));
+        log(`reused the artifact built at ${new Date(hit.builtAt).toISOString()}`);
+        return {
+          artifactRel: path.relative(d.folderHostPath, dest),
+          logRel,
+          exitCode: 0,
+          mode: "reused",
+          reusedBuiltAt: hit.builtAt,
+        };
+      }
+      reason = key ? "no-match" : "no-fingerprint";
+      log(key ? "no stored build matches; building in full" : "no cache key; building in full");
+    }
+
+    const builtAt = d.now();
+    const buildDir = path.join(d.globalStorage, `build-${builtAt}`);
+    fs.mkdirSync(buildDir, { recursive: true });
+    // The private copy is only needed until the artifact is copied into the workspace.
     try {
-      r = await d.runner.run(
+      const env: Record<string, string> = {
+        ...d.env,
+        EAS_NO_VCS: "1",
+        EAS_LOCAL_BUILD_ARTIFACTS_DIR: buildDir,
+        CI: "1",
+      };
+      if (d.token) env.EXPO_TOKEN = d.token;
+
+      const r = await d.runner.run(
         bun,
         [
           "x",
@@ -105,22 +159,24 @@ export async function build(profile: string, d: BuildDeps): Promise<BuildResult>
         ],
         { env, cwd: d.folderHostPath, onOutput: (chunk) => fs.writeSync(logFd, chunk) },
       );
-    } finally {
-      fs.closeSync(logFd);
-    }
 
-    const artifact = fs.readdirSync(buildDir).find((f) => !f.startsWith("."));
-    if (artifact) {
-      const dest = copyFresh(path.join(buildDir, artifact), path.join(outDir, artifact));
-      artifactRel = path.relative(d.folderHostPath, dest);
+      let artifactRel = "";
+      const artifact = fs.readdirSync(buildDir).find((f) => !f.startsWith("."));
+      if (artifact) {
+        const built = path.join(buildDir, artifact);
+        const dest = copyFresh(built, path.join(outDir, artifact));
+        artifactRel = path.relative(d.folderHostPath, dest);
+        if (r.code === 0) {
+          if (opts.clean) key = await cacheKey();
+          const stored = key ? await cache.store(key, built, builtAt) : false;
+          log(stored ? "stored the artifact for reuse" : "the artifact was not stored for reuse");
+        }
+      }
+      return { artifactRel, logRel, exitCode: r.code, mode: "built", reason };
+    } finally {
+      fs.rmSync(buildDir, { recursive: true, force: true });
     }
   } finally {
-    fs.rmSync(buildDir, { recursive: true, force: true });
+    fs.closeSync(logFd);
   }
-
-  return {
-    artifactRel,
-    logRel: path.relative(d.folderHostPath, logPath),
-    exitCode: r.code,
-  };
 }

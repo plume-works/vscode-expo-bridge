@@ -2,7 +2,10 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import { execFileSync } from "node:child_process";
 import type { ExecResult, Runner } from "../src/exec";
+import { realRunner } from "../src/exec";
+import { BuildCache } from "../src/buildcache";
 import { build, BuildError, type BuildDeps } from "../src/build";
 
 let hostPath: string;
@@ -47,8 +50,10 @@ function recordingRunner(
 
 function deps(partial: Partial<BuildDeps> = {}): BuildDeps {
   return {
+    hostPath,
     folderHostPath: hostPath,
     globalStorage: storage,
+    hostVersion: "0.3.0",
     env: { PATH: BINS },
     token: "robot-token",
     runner: recordingRunner([]),
@@ -172,8 +177,13 @@ describe("invocation", () => {
       },
     };
     const r = await build("development", deps({ runner }));
-    expect(seenMidBuild).toEqual(["step one\n"]);
-    expect(fs.readFileSync(path.join(hostPath, r.logRel), "utf8")).toBe("step one\nstep two\n");
+    const easLines = (log: string) => log.split("\n").filter((l) => !l.startsWith("expo-bridge: "));
+    expect(seenMidBuild.map(easLines)).toEqual([["step one", ""]]);
+    expect(easLines(fs.readFileSync(path.join(hostPath, r.logRel), "utf8"))).toEqual([
+      "step one",
+      "step two",
+      "",
+    ]);
   });
 
   test("reports a non-zero exit code", async () => {
@@ -188,5 +198,167 @@ describe("invocation", () => {
     const captured: Captured[] = [];
     await build("development", deps({ token: undefined, runner: recordingRunner(captured) }));
     expect("EXPO_TOKEN" in captured[0]!.env).toBe(false);
+  });
+});
+
+describe("reuse", () => {
+  const HASH = "0123456789abcdef0123456789abcdef01234567";
+  const XCODEBUILD = `${BINS}/xcodebuild`;
+
+  interface Reuse {
+    fingerprint?: ExecResult;
+    easExit?: number;
+    /** Files in the built `.app`; `main.jsbundle` marks a build with an embedded bundle. */
+    appFiles?: string[];
+    calls: string[][];
+  }
+
+  /** node prints the fingerprint, the probes print versions, tar runs for real. */
+  function reuseRunner(o: Reuse): Runner {
+    return {
+      async run(file, args, opts) {
+        o.calls.push([file, ...args]);
+        if (file === `${BINS}/node`) {
+          return o.fingerprint ?? { code: 0, stdout: `${HASH}\n`, stderr: "" };
+        }
+        if (file === XCODEBUILD) return { code: 0, stdout: "Xcode 27.0", stderr: "" };
+        // the stub env has no gzip on its PATH
+        if (file === "/usr/bin/tar") return realRunner.run("tar", args, { env: hostEnv });
+        if (args.includes("--version")) return { code: 0, stdout: "eas-cli/25.3.0", stderr: "" };
+        const outDir = opts!.env!.EAS_LOCAL_BUILD_ARTIFACTS_DIR!;
+        const app = path.join(outDir, ".src", "App.app");
+        fs.mkdirSync(app, { recursive: true });
+        for (const f of o.appFiles ?? ["Info.plist"]) fs.writeFileSync(path.join(app, f), f);
+        const art = path.join(outDir, "build-1.tar.gz");
+        execFileSync("tar", ["-czf", art, "-C", path.dirname(app), "App.app"]);
+        fs.rmSync(path.join(outDir, ".src"), { recursive: true });
+        return { code: o.easExit ?? 0, stdout: "", stderr: "" };
+      },
+    };
+  }
+
+  const hostEnv = { PATH: process.env.PATH ?? "" };
+  let clock = 1000;
+  const reuseDeps = (o: Reuse, partial: Partial<BuildDeps> = {}) =>
+    deps({
+      runner: reuseRunner(o),
+      fileExists: (p) =>
+        [`${BINS}/bun`, `${BINS}/node`, XCODEBUILD].includes(p) || fs.existsSync(p),
+      now: () => ++clock,
+      ...partial,
+    });
+  const easBuilds = (calls: string[][]) => calls.filter((c) => c.includes("--local")).length;
+  const log = (r: { logRel: string }) => fs.readFileSync(path.join(hostPath, r.logRel), "utf8");
+
+  beforeEach(() => {
+    fs.writeFileSync(path.join(hostPath, "package.json"), '{"name":"app"}');
+  });
+
+  test("a first build is built with no-match and stored; a repeat build is reused", async () => {
+    const calls: string[][] = [];
+    const first = await build("development", reuseDeps({ calls }));
+    expect(first).toMatchObject({ mode: "built", reason: "no-match", exitCode: 0 });
+    expect(first.reusedBuiltAt).toBeUndefined();
+
+    const second = await build("development", reuseDeps({ calls }));
+    expect(second.mode).toBe("reused");
+    expect(second.exitCode).toBe(0);
+    expect(second.reason).toBeUndefined();
+    expect(typeof second.reusedBuiltAt).toBe("number");
+    expect(easBuilds(calls)).toBe(1);
+    expect(second.artifactRel).toMatch(/^\.tmp\/expo-bridge\/build-\d+\.tar\.gz$/);
+    expect(second.artifactRel).not.toBe(first.artifactRel);
+    expect(fs.readFileSync(path.join(hostPath, second.artifactRel))).toEqual(
+      fs.readFileSync(path.join(hostPath, first.artifactRel)),
+    );
+    expect(log(second)).toContain(`fingerprint ${HASH}`);
+    expect(log(second)).toMatch(/cache key [0-9a-f]{64}/);
+    expect(log(second)).toContain("reused the artifact built at");
+  });
+
+  test("a changed input builds in full with no-match", async () => {
+    const calls: string[][] = [];
+    await build("development", reuseDeps({ calls }));
+    fs.writeFileSync(path.join(hostPath, "package.json"), '{"name":"app","version":"2"}');
+    const r = await build("development", reuseDeps({ calls }));
+    expect(r).toMatchObject({ mode: "built", reason: "no-match" });
+    expect(easBuilds(calls)).toBe(2);
+  });
+
+  test("no fingerprint builds in full with no-fingerprint and stores nothing", async () => {
+    const calls: string[][] = [];
+    const o = { calls, fingerprint: { code: 1, stdout: "", stderr: "no expo" } };
+    const r = await build("development", reuseDeps(o));
+    expect(r).toMatchObject({ mode: "built", reason: "no-fingerprint", exitCode: 0 });
+    expect(log(r)).toContain("fingerprint unavailable");
+    expect(await build("development", reuseDeps(o))).toMatchObject({ mode: "built" });
+    expect(easBuilds(calls)).toBe(2);
+  });
+
+  test("a fingerprint without a key is also no-fingerprint", async () => {
+    fs.rmSync(path.join(hostPath, "package.json"));
+    const r = await build("development", reuseDeps({ calls: [] }));
+    expect(r).toMatchObject({ mode: "built", reason: "no-fingerprint" });
+    expect(log(r)).toContain("cache key unavailable");
+  });
+
+  test("clean skips the lookup, builds in full, and stores under the key computed after", async () => {
+    const calls: string[][] = [];
+    await build("development", reuseDeps({ calls }));
+    const before = calls.length;
+    const r = await build("development", reuseDeps({ calls }), { clean: true });
+    expect(r).toMatchObject({ mode: "built", reason: "clean-requested", exitCode: 0 });
+    const cleanCalls = calls.slice(before);
+    const easAt = cleanCalls.findIndex((c) => c.includes("--local"));
+    const nodeAt = cleanCalls.findIndex((c) => c[0] === `${BINS}/node`);
+    expect(easAt).toBeGreaterThanOrEqual(0);
+    expect(nodeAt).toBeGreaterThan(easAt);
+
+    const again = await build("development", reuseDeps({ calls }));
+    expect(again.mode).toBe("reused");
+    expect(again.reusedBuiltAt).toBeGreaterThan(1000);
+  });
+
+  test("a failed build is not stored", async () => {
+    const calls: string[][] = [];
+    const failed = await build("development", reuseDeps({ calls, easExit: 65 }));
+    expect(failed).toMatchObject({ mode: "built", reason: "no-match", exitCode: 65 });
+    expect(log(failed)).not.toContain("stored the artifact");
+    const next = await build("development", reuseDeps({ calls }));
+    expect(next).toMatchObject({ mode: "built", reason: "no-match" });
+    expect(easBuilds(calls)).toBe(2);
+  });
+
+  test("a build that embeds main.jsbundle is never stored", async () => {
+    const calls: string[][] = [];
+    const o = { calls, appFiles: ["Info.plist", "main.jsbundle"] };
+    const r = await build("development", reuseDeps(o));
+    expect(log(r)).toContain("the artifact was not stored for reuse");
+    expect((await build("development", reuseDeps(o))).mode).toBe("built");
+    expect(easBuilds(calls)).toBe(2);
+  });
+
+  test("the cache is the folder's own, under the host path", async () => {
+    const calls: string[][] = [];
+    await build("development", reuseDeps({ calls }));
+    const tar = { runner: realRunner, env: hostEnv, tar: "tar" };
+    const own = new BuildCache(storage, hostPath, hostPath, tar);
+    expect(fs.readdirSync(own.dir).filter((f) => f.endsWith(".tar.gz"))).toHaveLength(1);
+    const other = await build("development", reuseDeps({ calls }, { hostPath: "/elsewhere" }));
+    expect(other.mode).toBe("built");
+  });
+
+  test("the log names no file's contents", async () => {
+    fs.writeFileSync(path.join(hostPath, "package.json"), '{"name":"SECRET-CONTENT"}');
+    const r = await build("development", reuseDeps({ calls: [] }));
+    expect(log(r)).not.toContain("SECRET-CONTENT");
+  });
+
+  test("an unconfirmed build runs no fingerprint step", async () => {
+    const calls: string[][] = [];
+    await expect(build("development", reuseDeps({ calls }, { confirmed: false }))).rejects.toThrow(
+      BuildError,
+    );
+    expect(calls).toEqual([]);
   });
 });

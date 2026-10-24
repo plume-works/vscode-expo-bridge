@@ -73,7 +73,7 @@ export async function dispatch(request: unknown, deps: DispatchDeps): Promise<Re
       if (!(await deps.confirmBuild(req.profile, at))) {
         return { ok: false, error: { code: "build-declined", message: "build not confirmed" } };
       }
-      return ok(await build(req.profile, await deps.buildDeps(at)));
+      return ok(await build(req.profile, await deps.buildDeps(at), { clean: req.clean === true }));
     }
 
     if (!(await deps.ensureTrusted())) {

@@ -131,6 +131,7 @@ async function fixShell() {
 function buildDispatchDeps(
   trust: TrustStore,
   globalStorage: string,
+  hostVersion: string,
   containerBunVersion: string | undefined,
 ): () => Promise<DispatchDeps> {
   return async () => {
@@ -180,16 +181,22 @@ function buildDispatchDeps(
       confirmBuild: async (profile: string, folderHostPath: string) =>
         hostPath ? trust.confirmBuild(hostPath, profile, folderHostPath) : false,
       ensureTrusted: async () => (hostPath ? trust.ensureTrusted(hostPath) : false),
-      buildDeps: async (folderHostPath: string) => ({
-        folderHostPath,
-        globalStorage,
-        env,
-        token: await trust.getToken(),
-        runner: realRunner,
-        fileExists,
-        confirmed: true,
-        now: Date.now,
-      }),
+      buildDeps: async (folderHostPath: string) => {
+        // dispatch builds only in a folder mapped under the resolved host path
+        if (!hostPath) throw new Error("no resolvable host path");
+        return {
+          hostPath,
+          folderHostPath,
+          globalStorage,
+          hostVersion,
+          env,
+          token: await trust.getToken(),
+          runner: realRunner,
+          fileExists,
+          confirmed: true,
+          now: Date.now,
+        };
+      },
       simContext,
     } satisfies DispatchDeps;
   };
@@ -197,6 +204,7 @@ function buildDispatchDeps(
 
 export function activate(context: vscode.ExtensionContext): void {
   const globalStorage = context.globalStorageUri.fsPath;
+  const hostVersion = String(context.extension.packageJSON.version);
   fs.mkdirSync(globalStorage, { recursive: true });
   const trust = new TrustStore(context.globalState, context.secrets, prompts());
   // The fix re-checks status itself, so it needs what the container's last status sent.
@@ -212,7 +220,12 @@ export function activate(context: vscode.ExtensionContext): void {
   const fixGate = new FixGate();
   const fixNotices = new FixNotices();
   const recheck = async () => {
-    const deps = await buildDispatchDeps(trust, globalStorage, lastContainerBunVersion)();
+    const deps = await buildDispatchDeps(
+      trust,
+      globalStorage,
+      hostVersion,
+      lastContainerBunVersion,
+    )();
     const folder: FolderMapping = lastFolder
       ? await deps.mapFolder(lastFolder)
       : { ok: false, detail: "no status request yet" };
@@ -231,7 +244,12 @@ export function activate(context: vscode.ExtensionContext): void {
           lastContainerBunVersion = request.containerBunVersion;
           lastFolder = typeof request.folder === "string" ? request.folder : undefined;
         }
-        const make = buildDispatchDeps(trust, globalStorage, request?.containerBunVersion);
+        const make = buildDispatchDeps(
+          trust,
+          globalStorage,
+          hostVersion,
+          request?.containerBunVersion,
+        );
         const response = await dispatch(request, await make());
         if (request?.action === "status" && response.ok)
           showFixes(fixItem, fixNotices, response.result as StatusResult);
