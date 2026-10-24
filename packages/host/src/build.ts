@@ -17,7 +17,8 @@ export class BuildError extends Error {
 const PROFILE_RE = /^[A-Za-z0-9_-]+$/;
 
 export interface BuildDeps {
-  hostPath: string;
+  /** The Mac path of the request's folder: the build runs and writes there. */
+  folderHostPath: string;
   /** The host extension's private global storage, where the artifact is built first. */
   globalStorage: string;
   env: Record<string, string>;
@@ -29,7 +30,7 @@ export interface BuildDeps {
   now: () => number;
 }
 
-/** Profiles declared in the workspace's `eas.json` `build` map. */
+/** Profiles declared in the folder's `eas.json` `build` map. */
 export function profilesOf(easJson: unknown): string[] {
   const build = (easJson as { build?: Record<string, unknown> })?.build;
   return build && typeof build === "object" ? Object.keys(build) : [];
@@ -39,7 +40,7 @@ export function profilesOf(easJson: unknown): string[] {
  * Run `eas build --local` through `bunx eas-cli@<spec>` for a simulator profile and leave
  * the artifact and log under `.tmp/expo-bridge/`. Validates the profile against
  * `eas.json`, never runs `eas init`, and builds into private global storage before copying
- * into the workspace under the fresh-write rule. The caller has already gated trust and the confirmation.
+ * into the folder under the fresh-write rule. The caller has already gated trust and the confirmation.
  */
 export async function build(profile: string, d: BuildDeps): Promise<BuildResult> {
   if (!d.confirmed)
@@ -48,7 +49,7 @@ export async function build(profile: string, d: BuildDeps): Promise<BuildResult>
     throw new BuildError({ code: "bad-argument", message: "invalid profile name" });
   }
 
-  const easJsonPath = path.join(d.hostPath, "eas.json");
+  const easJsonPath = path.join(d.folderHostPath, "eas.json");
   if (!d.fileExists(easJsonPath)) {
     throw new BuildError({ code: "not-found", message: "eas.json not found" });
   }
@@ -61,7 +62,7 @@ export async function build(profile: string, d: BuildDeps): Promise<BuildResult>
   if (!bun) throw new BuildError({ code: "action-failed", message: "bun not found" });
   let spec: string;
   try {
-    spec = easCliSpec(d.hostPath, d.fileExists);
+    spec = easCliSpec(d.folderHostPath, d.fileExists);
   } catch (e) {
     if (e instanceof EasCliError)
       throw new BuildError({ code: "bad-argument", message: e.message });
@@ -83,7 +84,7 @@ export async function build(profile: string, d: BuildDeps): Promise<BuildResult>
     };
     if (d.token) env.EXPO_TOKEN = d.token;
 
-    const outDir = path.join(d.hostPath, WRITE_DIR_REL);
+    const outDir = path.join(d.folderHostPath, WRITE_DIR_REL);
     fs.mkdirSync(outDir, { recursive: true });
     const fresh = openFreshUnique(path.join(outDir, `build-${d.now()}.log`));
     const logFd = fresh.fd;
@@ -102,7 +103,7 @@ export async function build(profile: string, d: BuildDeps): Promise<BuildResult>
           "--profile",
           profile,
         ],
-        { env, cwd: d.hostPath, onOutput: (chunk) => fs.writeSync(logFd, chunk) },
+        { env, cwd: d.folderHostPath, onOutput: (chunk) => fs.writeSync(logFd, chunk) },
       );
     } finally {
       fs.closeSync(logFd);
@@ -111,7 +112,7 @@ export async function build(profile: string, d: BuildDeps): Promise<BuildResult>
     const artifact = fs.readdirSync(buildDir).find((f) => !f.startsWith("."));
     if (artifact) {
       const dest = copyFresh(path.join(buildDir, artifact), path.join(outDir, artifact));
-      artifactRel = path.relative(d.hostPath, dest);
+      artifactRel = path.relative(d.folderHostPath, dest);
     }
   } finally {
     fs.rmSync(buildDir, { recursive: true, force: true });
@@ -119,7 +120,7 @@ export async function build(profile: string, d: BuildDeps): Promise<BuildResult>
 
   return {
     artifactRel,
-    logRel: path.relative(d.hostPath, logPath),
+    logRel: path.relative(d.folderHostPath, logPath),
     exitCode: r.code,
   };
 }

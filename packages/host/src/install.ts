@@ -31,7 +31,8 @@ export const METRO_URL = "http://localhost:8081";
 const DEV_MENU_QUIET = ["-EXDevMenuIsOnboardingFinished", "YES", "-EXDevMenuShowsAtLaunch", "NO"];
 
 export interface SimContext {
-  hostPath: string;
+  /** The Mac path of the request's folder, whose `.tmp/expo-bridge/` the actions use. */
+  folderHostPath: string;
   globalStorage: string;
   env: Record<string, string>;
   runner: Runner;
@@ -67,7 +68,7 @@ async function simulator(ctx: SimContext): Promise<string> {
 export async function install(artifactRel: string, ctx: SimContext): Promise<InstallResult> {
   let abs: string;
   try {
-    abs = requireUnderWriteDir(ctx.hostPath, artifactRel);
+    abs = requireUnderWriteDir(ctx.folderHostPath, artifactRel);
   } catch (e) {
     if (e instanceof PathError) throw new ActionError({ code: e.code, message: e.message });
     throw e;
@@ -138,10 +139,10 @@ export async function screenshot(ctx: SimContext): Promise<ScreenshotResult> {
     if (r.code !== 0) {
       throw new ActionError({ code: "action-failed", message: "simctl screenshot failed" });
     }
-    const outDir = path.join(ctx.hostPath, WRITE_DIR_REL);
+    const outDir = path.join(ctx.folderHostPath, WRITE_DIR_REL);
     fs.mkdirSync(outDir, { recursive: true });
     const dest = copyFresh(captured, path.join(outDir, name));
-    return { screenshotRel: path.relative(ctx.hostPath, dest) };
+    return { screenshotRel: path.relative(ctx.folderHostPath, dest) };
   } finally {
     fs.rmSync(privateDir, { recursive: true, force: true });
   }

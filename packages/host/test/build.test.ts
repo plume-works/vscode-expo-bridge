@@ -47,7 +47,7 @@ function recordingRunner(
 
 function deps(partial: Partial<BuildDeps> = {}): BuildDeps {
   return {
-    hostPath,
+    folderHostPath: hostPath,
     globalStorage: storage,
     env: { PATH: BINS },
     token: "robot-token",

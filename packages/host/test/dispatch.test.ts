@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { PROTOCOL_VERSION } from "@plume-works/expo-bridge-protocol";
+import { PROTOCOL_VERSION, type StatusResult } from "@plume-works/expo-bridge-protocol";
 import type { InstalledApp } from "../src/install";
 import { dispatch, type DispatchDeps } from "../src/dispatch";
 import type { Runner } from "../src/exec";
@@ -11,6 +11,7 @@ import type { StatusDeps } from "../src/status";
 let hostPath: string;
 let storage: string;
 const BINS = "/opt/homebrew/bin";
+const FOLDER = "/workspaces/app";
 let lastApp: InstalledApp | undefined;
 
 beforeEach(() => {
@@ -49,8 +50,8 @@ const okRunner: Runner = {
 function deps(partial: Partial<DispatchDeps> = {}): DispatchDeps {
   const fileExists = (p: string) =>
     p === `${BINS}/xcrun` || p === `${BINS}/tar` || p === `${BINS}/bun` || fs.existsSync(p);
-  const simContext = () => ({
-    hostPath,
+  const simContext = (folderHostPath: string) => ({
+    folderHostPath,
     globalStorage: storage,
     env: { PATH: BINS },
     runner: okRunner,
@@ -61,10 +62,11 @@ function deps(partial: Partial<DispatchDeps> = {}): DispatchDeps {
   });
   return {
     hostPath,
-    statusDeps: async (): Promise<StatusDeps> => ({
+    mapFolder: async () => ({ ok: true, folderHostPath: hostPath }),
+    statusDeps: async (_req, folder): Promise<StatusDeps> => ({
       platform: "darwin",
-      hostPath,
       hostPathExists: true,
+      folder,
       trusted: true,
       hasToken: true,
       env: { PATH: BINS },
@@ -78,8 +80,8 @@ function deps(partial: Partial<DispatchDeps> = {}): DispatchDeps {
     }),
     confirmBuild: async () => true,
     ensureTrusted: async () => true,
-    buildDeps: async () => ({
-      hostPath,
+    buildDeps: async (folderHostPath) => ({
+      folderHostPath,
       globalStorage: storage,
       env: { PATH: BINS },
       token: "t",
@@ -109,7 +111,7 @@ describe("dispatch", () => {
   test("status on a trusted workspace never prompts and reports the protocol version", async () => {
     let trustCalled = false;
     const r = await dispatch(
-      { action: "status" },
+      { action: "status", folder: FOLDER },
       deps({ ensureTrusted: async () => ((trustCalled = true), true) }),
     );
     expect(r.ok).toBe(true);
@@ -123,10 +125,13 @@ describe("dispatch", () => {
     for (const answer of [true, false]) {
       let trustCalled = false;
       const r = await dispatch(
-        { action: "status" },
+        { action: "status", folder: FOLDER },
         {
           ...base,
-          statusDeps: async (req) => ({ ...(await base.statusDeps(req)), trusted: false }),
+          statusDeps: async (req, folder) => ({
+            ...(await base.statusDeps(req, folder)),
+            trusted: false,
+          }),
           ensureTrusted: async () => ((trustCalled = true), answer),
         },
       );
@@ -145,11 +150,11 @@ describe("dispatch", () => {
     const base = deps();
     let trustCalled = false;
     await dispatch(
-      { action: "status" },
+      { action: "status", folder: FOLDER },
       {
         ...base,
-        statusDeps: async (req) => ({
-          ...(await base.statusDeps(req)),
+        statusDeps: async (req, folder) => ({
+          ...(await base.statusDeps(req, folder)),
           platform: "linux",
           trusted: false,
         }),
@@ -162,7 +167,7 @@ describe("dispatch", () => {
   test("a declined build confirmation returns build-declined and never runs the build", async () => {
     let buildDepsCalled = false;
     const r = await dispatch(
-      { action: "build", profile: "development" },
+      { action: "build", profile: "development", folder: FOLDER },
       deps({
         confirmBuild: async () => false,
         buildDeps: async () => ((buildDepsCalled = true), {} as never),
@@ -175,7 +180,10 @@ describe("dispatch", () => {
 
   test("an untrusted workspace blocks install/launch/screenshot", async () => {
     for (const action of ["install", "launch", "screenshot"] as const) {
-      const req = action === "install" ? { action, artifactRel: ".tmp/expo-bridge/x" } : { action };
+      const req =
+        action === "install"
+          ? { action, artifactRel: ".tmp/expo-bridge/x", folder: FOLDER }
+          : { action, folder: FOLDER };
       const r = await dispatch(req, deps({ ensureTrusted: async () => false }));
       expect(r.ok).toBe(false);
       if (!r.ok) expect(r.error.code).toBe("untrusted");
@@ -183,13 +191,103 @@ describe("dispatch", () => {
   });
 
   test("unavailable when the host path cannot be resolved (non-status action)", async () => {
-    const r = await dispatch({ action: "launch" }, deps({ hostPath: null }));
+    const r = await dispatch({ action: "launch", folder: FOLDER }, deps({ hostPath: null }));
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error.code).toBe("unavailable");
   });
 
+  test("a request without an absolute folder is a bad request", async () => {
+    for (const req of [{ action: "status" }, { action: "launch", folder: "workspaces/app" }]) {
+      const r = await dispatch(req, deps());
+      expect(r.ok).toBe(false);
+      if (!r.ok) expect(r.error.code).toBe("bad-request");
+    }
+  });
+
+  test("every action runs at the folder's Mac path, mapped before it runs", async () => {
+    const app = path.join(hostPath, "apps", "mobile");
+    const mapped: string[] = [];
+    const at: string[] = [];
+    const d = deps({
+      mapFolder: async (folder) => (mapped.push(folder), { ok: true, folderHostPath: app }),
+    });
+    await dispatch(
+      { action: "build", profile: "development", folder: FOLDER },
+      {
+        ...d,
+        confirmBuild: async (_p, folderHostPath) => (at.push(folderHostPath), false),
+      },
+    );
+    for (const action of ["launch", "screenshot"] as const) {
+      await dispatch(
+        { action, folder: FOLDER },
+        { ...d, simContext: (folderHostPath) => (at.push(folderHostPath), d.simContext(app)) },
+      );
+    }
+    expect(mapped).toEqual([FOLDER, FOLDER, FOLDER]);
+    expect(at).toEqual([app, app, app]);
+  });
+
+  test("a folder that does not map is unavailable, and nothing runs or prompts", async () => {
+    let prompted = false;
+    const d = deps({
+      mapFolder: async () => ({ ok: false, detail: "no bind mount of the container holds it" }),
+      confirmBuild: async () => ((prompted = true), true),
+      ensureTrusted: async () => ((prompted = true), true),
+    });
+    for (const req of [
+      { action: "build", profile: "development", folder: FOLDER },
+      { action: "launch", folder: FOLDER },
+    ]) {
+      const r = await dispatch(req, d);
+      expect(r).toEqual({
+        ok: false,
+        error: { code: "unavailable", message: "no bind mount of the container holds it" },
+      });
+    }
+    expect(prompted).toBe(false);
+  });
+
+  test("status reports an unmapped folder as unavailable without asking for trust", async () => {
+    const base = deps();
+    let trustCalled = false;
+    const r = await dispatch(
+      { action: "status", folder: FOLDER },
+      {
+        ...base,
+        mapFolder: async () => ({ ok: false, detail: "several running containers match" }),
+        statusDeps: async (req, folder) => ({
+          ...(await base.statusDeps(req, folder)),
+          trusted: false,
+        }),
+        ensureTrusted: async () => ((trustCalled = true), true),
+      },
+    );
+    expect(trustCalled).toBe(false);
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      const result = r.result as StatusResult;
+      expect(result.available).toBe(false);
+      expect(result.folderHostPath).toBe("");
+      expect(result.checks.workspaceMapped).toEqual({
+        ok: false,
+        detail: "several running containers match",
+      });
+    }
+  });
+
+  test("no folder is mapped without a host path", async () => {
+    let mapped = false;
+    const r = await dispatch(
+      { action: "status", folder: FOLDER },
+      deps({ hostPath: null, mapFolder: async () => ((mapped = true), { ok: false, detail: "" }) }),
+    );
+    expect(mapped).toBe(false);
+    if (r.ok) expect((r.result as StatusResult).available).toBe(false);
+  });
+
   test("a full build routes through and returns an artifact path", async () => {
-    const r = await dispatch({ action: "build", profile: "development" }, deps());
+    const r = await dispatch({ action: "build", profile: "development", folder: FOLDER }, deps());
     expect(r.ok).toBe(true);
     if (r.ok)
       expect(

@@ -23,11 +23,12 @@ export const USAGE = `usage: eas-host <status|build <profile>|install [path]|lau
 export const HELP = `${USAGE}
 
 Builds, installs, launches, and screenshots an iOS app on the Mac host of this VS Code
-window. Run the actions in this order:
+window. Run it inside the Expo app's workspace folder: it acts on the workspace folder
+that contains the current directory. Run the actions in this order:
 
   eas-host status            exits 0 when the bridge is available; otherwise use EAS cloud
   eas-host build <profile>   builds the eas.json profile; the result's artifactRel is the
-                             artifact's workspace-relative path under .tmp/expo-bridge/
+                             artifact's folder-relative path under .tmp/expo-bridge/
   eas-host install [path]    installs that artifact on the simulator; with no path, the
                              newest build artifact under .tmp/expo-bridge/
   eas-host launch            starts the installed app; a development build loads its bundle
@@ -37,12 +38,29 @@ window. Run the actions in this order:
                              path under .tmp/expo-bridge/
 
 Each result prints as one line of JSON on stdout; build log lines stream to stderr.
-Exit codes: 0 success, 1 the action failed, 2 a usage error, 3 the bridge is unavailable.`;
+Exit codes: 0 success, 1 the action failed, 2 a usage error, 3 the bridge is unavailable,
+including when no VS Code window has a workspace folder containing the current directory.`;
 
-/** An install with no path; the workspace extension resolves it to the newest artifact. */
-export type CliRequest =
-  | Exclude<Request, InstallRequest>
-  | (Omit<InstallRequest, "artifactRel"> & { artifactRel?: string });
+type WithoutFolder<T> = T extends unknown ? Omit<T, "folder"> : never;
+
+/**
+ * A request as parsed from argv: the workspace extension adds its `folder`, and resolves
+ * an install with no path to the newest artifact.
+ */
+export type CliArgs =
+  | WithoutFolder<Exclude<Request, InstallRequest>>
+  | (Omit<InstallRequest, "artifactRel" | "folder"> & { artifactRel?: string });
+
+/** What `eas-host` sends: the parsed request and the real directory it runs in. */
+export type CliRequest = CliArgs & { cwd: string };
+
+/** Why `eas-host` found no window to serve a run in `cwd`. */
+export function noWindowMessage(cwd: string): string {
+  return (
+    `expo bridge unavailable: no VS Code window has a workspace folder containing ${cwd}; ` +
+    "run eas-host inside the Expo app's workspace folder, or use EAS cloud"
+  );
+}
 
 export function isHelp(argv: string[]): boolean {
   return argv.length === 1 && ["help", "--help", "-h"].includes(argv[0]!);
@@ -52,7 +70,7 @@ export function isHelp(argv: string[]): boolean {
  * Parse the `eas-host` argv (without node/script) into a request. Each action maps to
  * exactly one request; unknown actions and missing arguments are usage errors.
  */
-export function parseArgs(argv: string[], containerBunVersion?: string): CliRequest {
+export function parseArgs(argv: string[], containerBunVersion?: string): CliArgs {
   const [action, ...rest] = argv;
   if (!action || !isAction(action)) {
     throw new UsageError(`unknown action (expected one of ${ACTIONS.join(", ")})\n${USAGE}`);

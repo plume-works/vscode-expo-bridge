@@ -4,13 +4,15 @@ import { PROTOCOL_VERSION } from "@plume-works/expo-bridge-protocol";
 import type { Runner } from "./exec";
 import { lookupTool } from "./env";
 import { EasCliError, easCliSpec } from "./eascli";
+import type { FolderMapping } from "./folder";
 import { readJsonFile } from "./jsonfile";
 import { planBoot, SimulatorError } from "./simulator";
 
 export interface StatusDeps {
   platform: string;
-  hostPath: string;
   hostPathExists: boolean;
+  /** The request's folder mapped to its Mac path, where the project checks read. */
+  folder: FolderMapping;
   trusted: boolean;
   hasToken: boolean;
   containerBunVersion?: string;
@@ -40,23 +42,27 @@ async function toolVersion(d: StatusDeps, tool: string, args: string[]): Promise
 }
 
 /**
- * Report whether the bridge can serve a build. On a non-Mac host, or when the workspace
- * host path does not exist locally, `available` is false and the tool checks are skipped.
+ * Report whether the bridge can serve a build in the request's folder. On a non-Mac host,
+ * when the workspace host path does not exist locally, or when the folder does not map
+ * under it, `available` is false and the tool checks are skipped.
  */
 export async function status(d: StatusDeps): Promise<StatusResult> {
   const macHost = d.platform === "darwin";
   const hostPathExists = d.hostPathExists;
-  const available = macHost && hostPathExists;
+  const folderHostPath = d.folder.ok ? d.folder.folderHostPath : "";
+  const available = macHost && hostPathExists && d.folder.ok;
 
   const base: StatusResult = {
     protocolVersion: PROTOCOL_VERSION,
     available,
+    folderHostPath,
     checks: {
       macHost: { ok: macHost, detail: macHost ? undefined : "host is not macOS" },
       hostPathExists: {
         ok: hostPathExists,
         detail: hostPathExists ? undefined : "workspace host path does not exist locally",
       },
+      workspaceMapped: d.folder.ok ? { ok: true } : { ok: false, detail: d.folder.detail },
       workspaceTrusted: {
         ok: d.trusted,
         detail: d.trusted ? undefined : "workspace is not trusted",
@@ -95,7 +101,7 @@ export async function status(d: StatusDeps): Promise<StatusResult> {
   const node = await toolVersion(d, "node", ["--version"]);
   base.checks.node = node ? { ok: true } : { ok: false, detail: "Node not found" };
 
-  base.checks.easCli = easCliCheck(d);
+  base.checks.easCli = easCliCheck(folderHostPath, d.fileExists);
 
   const hostBun = await toolVersion(d, "bun", ["--version"]);
   if (!hostBun) {
@@ -109,7 +115,7 @@ export async function status(d: StatusDeps): Promise<StatusResult> {
     base.checks.bun = { ok: true };
   }
 
-  base.checks.easProjectId = readProjectId(d.hostPath, d.fileExists)
+  base.checks.easProjectId = readProjectId(folderHostPath, d.fileExists)
     ? { ok: true }
     : { ok: false, detail: "extra.eas.projectId not set in app.json" };
 
@@ -119,9 +125,9 @@ export async function status(d: StatusDeps): Promise<StatusResult> {
 }
 
 /** Which eas-cli `build` would run; fails only on a spec that is not a version range. */
-function easCliCheck(d: StatusDeps): StatusCheck {
+function easCliCheck(folderHostPath: string, fileExists: (p: string) => boolean): StatusCheck {
   try {
-    const spec = easCliSpec(d.hostPath, d.fileExists);
+    const spec = easCliSpec(folderHostPath, fileExists);
     return spec === "latest"
       ? { ok: true, detail: "eas-cli@latest (no cli.version in eas.json)" }
       : { ok: true, detail: `eas-cli@${spec}` };
@@ -131,8 +137,8 @@ function easCliCheck(d: StatusDeps): StatusCheck {
   }
 }
 
-function readProjectId(hostPath: string, fileExists: (p: string) => boolean): boolean {
-  const appJson = path.join(hostPath, "app.json");
+function readProjectId(folderHostPath: string, fileExists: (p: string) => boolean): boolean {
+  const appJson = path.join(folderHostPath, "app.json");
   if (!fileExists(appJson)) return false;
   try {
     const parsed = readJsonFile(appJson) as { expo?: { extra?: { eas?: { projectId?: string } } } };

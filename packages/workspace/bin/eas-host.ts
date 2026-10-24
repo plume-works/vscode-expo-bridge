@@ -1,18 +1,25 @@
 #!/usr/bin/env node
 import { execFileSync } from "node:child_process";
+import * as fs from "node:fs";
 import * as net from "node:net";
+import { PROTOCOL_VERSION, SOCKET_DIR, type StatusResult } from "@plume-works/expo-bridge-protocol";
 import {
-  PROTOCOL_VERSION,
-  SOCKET_PATH,
-  type StatusResult,
-} from "@plume-works/expo-bridge-protocol";
-import { containerBunVersion, HELP, isHelp, parseArgs, UsageError } from "../src/cli-args";
+  containerBunVersion,
+  HELP,
+  isHelp,
+  noWindowMessage,
+  parseArgs,
+  UsageError,
+  type CliRequest,
+} from "../src/cli-args";
+import { liveEntries, selectEntry, socketPath } from "../src/registry";
 import { encodeRequest, LineDecoder, type Frame } from "../src/wire";
 
 /**
- * Run one action over the bridge socket, or print the help. Exit codes: 0 success, 1 the action failed, 2 a
- * usage error, 3 the bridge is unavailable (no socket, or `status` reports unavailable or
- * another protocol version).
+ * Run one action over the socket of the window whose workspace folder contains the current
+ * directory, or print the help. Exit codes: 0 success, 1 the action failed, 2 a usage error,
+ * 3 the bridge is unavailable (no such window, no socket, or `status` reports unavailable
+ * or another protocol version).
  * The final result prints as JSON on stdout; build log lines stream to stderr so stdout
  * stays a single parseable object.
  */
@@ -22,21 +29,28 @@ async function main(): Promise<number> {
     process.stdout.write(HELP + "\n");
     return 0;
   }
-  let request;
+  let request: CliRequest;
+  const cwd = fs.realpathSync(process.cwd());
   try {
     const bun =
       argv[0] === "status"
         ? containerBunVersion((file, args) => execFileSync(file, args, { encoding: "utf8" }))
         : undefined;
-    request = parseArgs(argv, bun);
+    request = { ...parseArgs(argv, bun), cwd };
   } catch (e) {
     process.stderr.write((e instanceof UsageError ? e.message : String(e)) + "\n");
     return 2;
   }
 
+  const window = selectEntry(liveEntries(SOCKET_DIR), cwd);
+  if (!window) {
+    process.stderr.write(noWindowMessage(cwd) + "\n");
+    return 3;
+  }
+
   return new Promise<number>((resolve) => {
     const decoder = new LineDecoder<Frame>();
-    const socket = net.createConnection(SOCKET_PATH);
+    const socket = net.createConnection(socketPath(SOCKET_DIR, window.id));
     let settled = false;
     const done = (code: number) => {
       if (!settled) {

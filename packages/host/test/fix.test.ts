@@ -10,9 +10,11 @@ function statusWith(
   return {
     protocolVersion: PROTOCOL_VERSION,
     available: true,
+    folderHostPath: "/Users/me/app",
     checks: {
       macHost: ok("macHost"),
       hostPathExists: ok("hostPathExists"),
+      workspaceMapped: ok("workspaceMapped"),
       workspaceTrusted: ok("workspaceTrusted"),
       xcode: ok("xcode"),
       cocoapods: ok("cocoapods"),

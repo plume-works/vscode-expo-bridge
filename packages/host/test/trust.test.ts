@@ -45,6 +45,30 @@ beforeEach(() => {
   clock = 1_000_000;
 });
 
+describe("a build in a folder under the host path", () => {
+  test("the confirmation names the folder; trust and the cooldown stay on the host path", async () => {
+    const asked: string[][] = [];
+    const p: Prompts = {
+      trust: async (hostPath) => (asked.push(["trust", hostPath]), "allow"),
+      build: async (hostPath, profile, folderHostPath) => (
+        asked.push(["build", hostPath, profile, folderHostPath]),
+        "hour"
+      ),
+    };
+    const store = new TrustStore(state, secrets, p, () => clock);
+    expect(await store.confirmBuild(HOST, "development", `${HOST}/apps/mobile`)).toBe(true);
+    expect(asked).toEqual([
+      ["trust", HOST],
+      ["build", HOST, "development", `${HOST}/apps/mobile`],
+    ]);
+    expect(store.listTrusted()).toEqual([HOST]);
+    expect(store.hasCooldown(HOST)).toBe(true);
+    // The cooldown covers a build in another folder of the same host path.
+    expect(await store.confirmBuild(HOST, "development", `${HOST}/apps/web`)).toBe(true);
+    expect(asked).toHaveLength(2);
+  });
+});
+
 describe("trust", () => {
   test("prompts once, then remembers an allow", async () => {
     let calls = 0;

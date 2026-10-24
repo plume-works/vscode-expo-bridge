@@ -3,9 +3,9 @@ import { encodeFrame, encodeRequest, LineDecoder, type Frame } from "../src/wire
 
 describe("encoding", () => {
   test("a request is one newline-terminated JSON line", () => {
-    const s = encodeRequest({ action: "build", profile: "development" });
+    const s = encodeRequest({ action: "build", profile: "development", cwd: "/w" });
     expect(s.endsWith("\n")).toBe(true);
-    expect(JSON.parse(s.trim())).toEqual({ action: "build", profile: "development" });
+    expect(JSON.parse(s.trim())).toEqual({ action: "build", profile: "development", cwd: "/w" });
   });
 
   test("a frame round-trips", () => {

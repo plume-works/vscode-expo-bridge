@@ -60,8 +60,8 @@ function deps(partial: Partial<StatusDeps> = {}): StatusDeps {
   const present = new Set(["xcrun", "pod", "fastlane", "node", "bun"].map((t) => `${BINS}/${t}`));
   return {
     platform: "darwin",
-    hostPath,
     hostPathExists: true,
+    folder: { ok: true, folderHostPath: hostPath },
     trusted: true,
     hasToken: true,
     containerBunVersion: "1.4.0",
@@ -90,6 +90,14 @@ describe("availability", () => {
     expect(r.checks.xcode.ok).toBe(false); // tool checks skipped
   });
 
+  test("unavailable when the folder does not map, reporting why", async () => {
+    const r = await status(deps({ folder: { ok: false, detail: "no bind mount" } }));
+    expect(r.available).toBe(false);
+    expect(r.folderHostPath).toBe("");
+    expect(r.checks.workspaceMapped).toEqual({ ok: false, detail: "no bind mount" });
+    expect(r.checks.easProjectId.ok).toBe(false); // project checks skipped
+  });
+
   test("unavailable when the host path does not exist", async () => {
     const r = await status(deps({ hostPathExists: false }));
     expect(r.available).toBe(false);
@@ -108,6 +116,23 @@ describe("checks", () => {
     for (const [name, c] of Object.entries(r.checks)) {
       expect(c.ok, `${name} should be ok`).toBe(true);
     }
+  });
+
+  test("the project checks read the folder's Mac path, which status reports", async () => {
+    const app = path.join(hostPath, "apps", "mobile");
+    fs.mkdirSync(app, { recursive: true });
+    fs.writeFileSync(
+      path.join(app, "app.json"),
+      JSON.stringify({ expo: { extra: { eas: { projectId: "abc" } } } }),
+    );
+    fs.writeFileSync(path.join(app, "eas.json"), JSON.stringify({ cli: { version: "16.2.0" } }));
+    const r = await status(deps({ folder: { ok: true, folderHostPath: app } }));
+    expect(r.folderHostPath).toBe(app);
+    expect(r.checks.workspaceMapped.ok).toBe(true);
+    expect(r.checks.easProjectId.ok).toBe(true);
+    expect(r.checks.easCli.detail).toBe("eas-cli@16.2.0");
+    // The host path's own root has neither file.
+    expect((await status(deps())).checks.easProjectId.ok).toBe(false);
   });
 
   test("Command Line Tools without Xcode fail the Xcode check", async () => {

@@ -40,24 +40,69 @@ describe("newestArtifact", () => {
 });
 
 describe("resolveRequest", () => {
-  test("an install with no path gets the newest artifact", () => {
+  test("an install with no path gets the newest artifact of the cwd's folder", () => {
     write("build-1.tar.gz", 1000);
-    expect(resolveRequest({ action: "install" }, root)).toEqual({
-      request: { action: "install", artifactRel: path.join(WRITE_DIR_REL, "build-1.tar.gz") },
+    expect(resolveRequest({ action: "install", cwd: path.join(root, "src") }, [root])).toEqual({
+      request: {
+        action: "install",
+        artifactRel: path.join(WRITE_DIR_REL, "build-1.tar.gz"),
+        folder: root,
+      },
     });
   });
 
-  test("an explicit path and other actions pass through", () => {
-    const install = { action: "install" as const, artifactRel: ".tmp/expo-bridge/x.tar.gz" };
-    expect(resolveRequest(install, root)).toEqual({ request: install });
-    expect(resolveRequest({ action: "launch" }, undefined)).toEqual({
-      request: { action: "launch" },
+  test("the request names the longest folder containing the cwd, without the cwd", () => {
+    const app = path.join(root, "apps", "mobile");
+    expect(resolveRequest({ action: "launch", cwd: path.join(app, "src") }, [root, app])).toEqual({
+      request: { action: "launch", folder: app },
     });
+    expect(resolveRequest({ action: "launch", cwd: root }, [root, app])).toEqual({
+      request: { action: "launch", folder: root },
+    });
+  });
+
+  test("the newest artifact comes from the request's folder, not the first one", () => {
+    write("build-1.tar.gz", 1000);
+    const other = fs.mkdtempSync(path.join(os.tmpdir(), "expo-bridge-artifacts-other-"));
+    try {
+      fs.mkdirSync(path.join(other, WRITE_DIR_REL), { recursive: true });
+      fs.writeFileSync(path.join(other, WRITE_DIR_REL, "build-9.tar.gz"), "");
+      expect(resolveRequest({ action: "install", cwd: other }, [root, other])).toEqual({
+        request: {
+          action: "install",
+          artifactRel: path.join(WRITE_DIR_REL, "build-9.tar.gz"),
+          folder: other,
+        },
+      });
+    } finally {
+      fs.rmSync(other, { recursive: true, force: true });
+    }
+  });
+
+  test("an explicit path passes through", () => {
+    const install = {
+      action: "install" as const,
+      artifactRel: ".tmp/expo-bridge/x.tar.gz",
+      cwd: root,
+    };
+    expect(resolveRequest(install, [root])).toEqual({
+      request: { action: "install", artifactRel: ".tmp/expo-bridge/x.tar.gz", folder: root },
+    });
+  });
+
+  test("a cwd outside every folder is unavailable", () => {
+    const r = resolveRequest({ action: "status", cwd: "/elsewhere" }, [root]);
+    expect("error" in r && r.error.code).toBe("unavailable");
+    expect("error" in r && r.error.message).toContain("/elsewhere");
+  });
+
+  test("a request without an absolute cwd is a bad request", () => {
+    const r = resolveRequest({ action: "status" } as never, [root]);
+    expect("error" in r && r.error.code).toBe("bad-request");
   });
 
   test("an install with no path and no artifact is not-found", () => {
-    const r = resolveRequest({ action: "install" }, root);
+    const r = resolveRequest({ action: "install", cwd: root }, [root]);
     expect("error" in r && r.error.code).toBe("not-found");
-    expect("error" in resolveRequest({ action: "install" }, undefined)).toBe(true);
   });
 });

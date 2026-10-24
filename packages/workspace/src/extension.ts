@@ -1,16 +1,18 @@
+import { randomBytes } from "node:crypto";
 import * as fs from "node:fs";
 import * as net from "node:net";
 import * as os from "node:os";
 import * as path from "node:path";
 import * as vscode from "vscode";
 import {
-  SOCKET_PATH,
+  SOCKET_DIR,
   WRITE_DIR_REL,
   type Request,
   type Response,
 } from "@plume-works/expo-bridge-protocol";
 import { resolveRequest } from "./artifacts";
 import type { CliRequest } from "./cli-args";
+import { ensureRegistryDir, pruneStale, removeOwn, socketPath, writeEntry } from "./registry";
 import { encodeFrame, LineDecoder } from "./wire";
 
 const DISPATCH_COMMAND = "expoBridge.ui.dispatch";
@@ -57,8 +59,8 @@ function tailLog(logPath: string, onLine: (line: string) => void): () => void {
   };
 }
 
-function newestBuildLog(workspaceRoot: string, since: number): string | null {
-  const dir = path.join(workspaceRoot, WRITE_DIR_REL);
+function newestBuildLog(folder: string, since: number): string | null {
+  const dir = path.join(folder, WRITE_DIR_REL);
   if (!fs.existsSync(dir)) return null;
   const logs = fs
     .readdirSync(dir)
@@ -69,22 +71,26 @@ function newestBuildLog(workspaceRoot: string, since: number): string | null {
   return logs.length ? path.join(dir, logs[0]!.f) : null;
 }
 
+/** The container paths of this window's workspace folders, as VS Code names them. */
+function workspaceFolders(): string[] {
+  return (vscode.workspace.workspaceFolders ?? []).map((f) => f.uri.fsPath);
+}
+
 async function handleRequest(
   cliRequest: CliRequest,
-  workspaceRoot: string | undefined,
   emit: (frame: { kind: "log"; line: string } | { kind: "response"; response: Response }) => void,
 ): Promise<void> {
-  const resolved = resolveRequest(cliRequest, workspaceRoot);
+  const resolved = resolveRequest(cliRequest, workspaceFolders());
   if ("error" in resolved) {
     emit({ kind: "response", response: { ok: false, error: resolved.error } });
     return;
   }
   const request: Request = resolved.request;
   let stopTail: (() => void) | undefined;
-  if (request.action === "build" && workspaceRoot) {
+  if (request.action === "build") {
     const since = Date.now();
     const poll = setInterval(() => {
-      const log = newestBuildLog(workspaceRoot, since);
+      const log = newestBuildLog(request.folder, since);
       if (log) {
         clearInterval(poll);
         stopTail = tailLog(log, (line) => emit({ kind: "log", line }));
@@ -115,13 +121,22 @@ export function activate(context: vscode.ExtensionContext): void {
     void vscode.window.showWarningMessage(`Expo Bridge: could not install eas-host: ${String(e)}`);
   }
 
-  const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-
-  try {
-    fs.rmSync(SOCKET_PATH, { force: true });
-  } catch {
-    // a stale socket that cannot be removed will surface as a listen error below
-  }
+  // One socket per window: several windows can share a container. See docs/protocol.md.
+  const id = randomBytes(8).toString("hex");
+  const activatedAt = Date.now();
+  const warn = (e: unknown) =>
+    void vscode.window.showWarningMessage(`Expo Bridge socket: ${String(e)}`);
+  const register = () => {
+    try {
+      writeEntry(SOCKET_DIR, id, {
+        pid: process.pid,
+        activatedAt,
+        folders: workspaceFolders(),
+      });
+    } catch (e) {
+      warn(e);
+    }
+  };
 
   const server = net.createServer((conn) => {
     const decoder = new LineDecoder<CliRequest>();
@@ -130,24 +145,27 @@ export function activate(context: vscode.ExtensionContext): void {
     ) => conn.write(encodeFrame(frame));
     conn.on("data", (chunk) => {
       for (const request of decoder.feed(chunk.toString("utf8"))) {
-        void handleRequest(request, workspaceRoot, emit).then(() => conn.end());
+        void handleRequest(request, emit).then(() => conn.end());
       }
     });
     conn.on("error", () => conn.destroy());
   });
-  server.on(
-    "error",
-    (e) => void vscode.window.showWarningMessage(`Expo Bridge socket: ${String(e)}`),
-  );
-  server.listen(SOCKET_PATH);
+  server.on("error", warn);
+  try {
+    ensureRegistryDir(SOCKET_DIR);
+    pruneStale(SOCKET_DIR);
+    server.listen(socketPath(SOCKET_DIR, id), register);
+  } catch (e) {
+    warn(e);
+  }
 
-  context.subscriptions.push({
+  context.subscriptions.push(vscode.workspace.onDidChangeWorkspaceFolders(register), {
     dispose: () => {
       server.close();
       try {
-        fs.rmSync(SOCKET_PATH, { force: true });
+        removeOwn(SOCKET_DIR, id);
       } catch {
-        // best-effort cleanup on deactivate
+        // best-effort cleanup on deactivate; a later activation prunes the dead entry
       }
     },
   });
