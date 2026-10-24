@@ -9,6 +9,12 @@ Simulator it boots when none is running, and takes screenshots — for a devcont
 on the Mac. A build runs project code on the Mac with your privileges, behind
 per-workspace trust and a per-build confirmation.
 
+A development build is reused when its native inputs — the project's `@expo/fingerprint`,
+the profile, `eas.json`, `package.json`, the lockfile, and the eas-cli, Xcode, and extension
+versions — match an earlier build of the same workspace folder, so a JavaScript-only change
+skips the native build. `eas-host build <profile> --clean` forces a full build. Revoking a
+workspace's trust deletes its stored builds.
+
 Commands: set/clear `EXPO_TOKEN`, manage trusted workspaces, ask before every build again, and
 fix missing tools.
 
