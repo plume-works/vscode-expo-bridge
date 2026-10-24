@@ -5,11 +5,12 @@ import type { BuildDecision, Prompts, TrustDecision } from "./trust";
 import { BUILD_ANSWERS, TrustStore } from "./trust";
 import { dispatch, type DispatchDeps } from "./dispatch";
 import { decodeHostPath, type ResolvedHost } from "./hostpath";
-import { captureLoginEnv, lookupDocker } from "./env";
+import { captureLoginEnv, lookupDocker, withHomebrewPath } from "./env";
 import { realRunner } from "./exec";
 import { resolveFolder, type FolderMapping } from "./folder";
 import { FixNotices, fixSummary, planFixes } from "./fix";
 import { FixGate, runCommands, type RunCommand } from "./fixrun";
+import { fixTerminalShell } from "./shell";
 import type { InstalledApp } from "./install";
 import { portAcceptsConnections } from "./port";
 import { status } from "./status";
@@ -109,6 +110,22 @@ function resolveHost(): ResolvedHost | null {
 /** The host path of this window's own remote authority. */
 function resolveHostPath(): string | null {
   return resolveHost()?.hostPath ?? null;
+}
+
+/** The fix terminal's shell, resolved on the Mac from the merged terminal profile settings. */
+async function fixShell() {
+  const loginShell = process.env.SHELL ?? "/bin/zsh";
+  const env = await captureLoginEnv(loginShell).catch(() =>
+    withHomebrewPath({ PATH: process.env.PATH ?? "" }),
+  );
+  const terminalConfig = vscode.workspace.getConfiguration("terminal.integrated");
+  return fixTerminalShell(
+    terminalConfig.get("defaultProfile.osx"),
+    terminalConfig.get("profiles.osx"),
+    env,
+    (p) => fs.existsSync(p),
+    loginShell,
+  );
 }
 
 function buildDispatchDeps(
@@ -316,6 +333,7 @@ export function activate(context: vscode.ExtensionContext): void {
           const terminal = vscode.window.createTerminal({
             name: "Expo Bridge fix",
             cwd: vscode.Uri.file(os.homedir()),
+            ...(await fixShell()),
           });
           terminal.show();
           const run = await shellRunner(terminal);

@@ -11,3 +11,7 @@ per-workspace trust and a per-build confirmation.
 
 Commands: set/clear `EXPO_TOKEN`, manage trusted workspaces, ask before every build again, and
 fix missing tools.
+
+A fix runs in a Mac terminal that opens with the Mac's default terminal profile
+(`terminal.integrated.defaultProfile.osx`), or with your login shell when that profile is not
+found on the Mac.
