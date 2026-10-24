@@ -53,6 +53,8 @@ export interface BuildRequest extends FolderRequest {
   action: "build";
   /** A profile name that must exist in the folder's `eas.json`. */
   profile: string;
+  /** Build in full instead of reusing a matching earlier artifact; a host without reuse ignores it. */
+  clean?: boolean;
 }
 
 export interface InstallRequest extends FolderRequest {
@@ -112,7 +114,17 @@ export interface BuildResult {
   /** Folder-relative path of the build log, tailed by `eas-host` while running. */
   logRel: string;
   exitCode: number;
+  /** `reused` returned a stored artifact without running eas-cli; absent from a host without reuse. */
+  mode?: BuildMode;
+  /** Why a `built` build did not reuse an earlier artifact. */
+  reason?: BuildReason;
+  /** Epoch ms when a `reused` artifact was built. */
+  reusedBuiltAt?: number;
 }
+
+export type BuildMode = "built" | "reused";
+
+export type BuildReason = "clean-requested" | "no-fingerprint" | "no-match";
 
 export interface InstallResult {
   bundleIdentifier: string;
