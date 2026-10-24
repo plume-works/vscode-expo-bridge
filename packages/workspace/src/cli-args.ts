@@ -18,7 +18,7 @@ export function containerBunVersion(
   }
 }
 
-export const USAGE = `usage: eas-host <status|build <profile>|install [path]|launch|screenshot>`;
+export const USAGE = `usage: eas-host <status|build <profile> [--clean]|install [path]|launch|screenshot>`;
 
 export const HELP = `${USAGE}
 
@@ -28,7 +28,9 @@ that contains the current directory. Run the actions in this order:
 
   eas-host status            exits 0 when the bridge is available; otherwise use EAS cloud
   eas-host build <profile>   builds the eas.json profile; the result's artifactRel is the
-                             artifact's folder-relative path under .tmp/expo-bridge/
+                             artifact's folder-relative path under .tmp/expo-bridge/. A
+                             development build reuses an earlier artifact when the native
+                             inputs are unchanged (mode "reused"); --clean forces a full build
   eas-host install [path]    installs that artifact on the simulator; with no path, the
                              newest build artifact under .tmp/expo-bridge/
   eas-host launch            starts the installed app; a development build loads its bundle
@@ -79,9 +81,13 @@ export function parseArgs(argv: string[], containerBunVersion?: string): CliArgs
     case "status":
       return { action, ...(containerBunVersion ? { containerBunVersion } : {}) };
     case "build": {
-      const profile = rest[0];
-      if (!profile) throw new UsageError(`build needs a profile\n${USAGE}`);
-      return { action, profile };
+      const [profile, ...flags] = rest;
+      if (!profile || profile.startsWith("-")) {
+        throw new UsageError(`build needs a profile\n${USAGE}`);
+      }
+      if (flags.length === 0) return { action, profile };
+      if (flags.length === 1 && flags[0] === "--clean") return { action, profile, clean: true };
+      throw new UsageError(`build takes only a profile and --clean\n${USAGE}`);
     }
     case "install": {
       const artifactRel = rest[0];
