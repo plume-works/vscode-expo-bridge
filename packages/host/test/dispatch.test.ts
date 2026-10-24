@@ -180,6 +180,17 @@ describe("dispatch", () => {
     }
   });
 
+  test("the build confirmation learns whether the build is clean", async () => {
+    const seen: boolean[] = [];
+    for (const clean of [true, undefined]) {
+      await dispatch(
+        { action: "build", profile: "development", folder: FOLDER, clean },
+        deps({ confirmBuild: async (_p, _f, c) => (seen.push(c), false) }),
+      );
+    }
+    expect(seen).toEqual([true, false]);
+  });
+
   test("a declined build confirmation returns build-declined and never runs the build", async () => {
     let buildDepsCalled = false;
     const r = await dispatch(

@@ -2,7 +2,8 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as vscode from "vscode";
 import type { BuildDecision, Prompts, TrustDecision } from "./trust";
-import { BUILD_ANSWERS, TrustStore } from "./trust";
+import { BUILD_ANSWERS, buildConfirmationText, TrustStore } from "./trust";
+import { remove as removeBuildCache } from "./buildcache";
 import { dispatch, type DispatchDeps } from "./dispatch";
 import { decodeHostPath, type ResolvedHost } from "./hostpath";
 import { captureLoginEnv, lookupDocker, withHomebrewPath } from "./env";
@@ -30,9 +31,9 @@ const prompts = (): Prompts => ({
     );
     return choice === "Allow" ? "allow" : "decline";
   },
-  async build(_hostPath, profile, folderHostPath): Promise<BuildDecision | undefined> {
+  async build(_hostPath, profile, folderHostPath, clean): Promise<BuildDecision | undefined> {
     const choice = await vscode.window.showWarningMessage(
-      `Run the "${profile}" Expo build on this Mac? Project code will run with your privileges.\n\n${folderHostPath}`,
+      buildConfirmationText(profile, folderHostPath, clean),
       { modal: true },
       ...Object.values(BUILD_ANSWERS),
     );
@@ -178,8 +179,8 @@ function buildDispatchDeps(
         fileExists,
         port8081Forwarded: await portAcceptsConnections(8081, 500),
       }),
-      confirmBuild: async (profile: string, folderHostPath: string) =>
-        hostPath ? trust.confirmBuild(hostPath, profile, folderHostPath) : false,
+      confirmBuild: async (profile: string, folderHostPath: string, clean: boolean) =>
+        hostPath ? trust.confirmBuild(hostPath, profile, folderHostPath, clean) : false,
       ensureTrusted: async () => (hostPath ? trust.ensureTrusted(hostPath) : false),
       buildDeps: async (folderHostPath: string) => {
         // dispatch builds only in a folder mapped under the resolved host path
@@ -206,7 +207,9 @@ export function activate(context: vscode.ExtensionContext): void {
   const globalStorage = context.globalStorageUri.fsPath;
   const hostVersion = String(context.extension.packageJSON.version);
   fs.mkdirSync(globalStorage, { recursive: true });
-  const trust = new TrustStore(context.globalState, context.secrets, prompts());
+  const trust = new TrustStore(context.globalState, context.secrets, prompts(), Date.now, (h) =>
+    removeBuildCache(globalStorage, h),
+  );
   // The fix re-checks status itself, so it needs what the container's last status sent.
   let lastContainerBunVersion: string | undefined;
   let lastFolder: string | undefined;
@@ -294,7 +297,7 @@ export function activate(context: vscode.ExtensionContext): void {
       );
       if (pick && decisions.some((d) => d.hostPath === pick.label)) {
         const yes = await vscode.window.showWarningMessage(
-          `Revoke the ${pick.description} decision for ${pick.label}? Its next request will ask again.`,
+          `Revoke the ${pick.description} decision for ${pick.label}? Its next request will ask again, and its build cache is deleted.`,
           { modal: true },
           "Revoke",
         );

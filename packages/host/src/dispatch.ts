@@ -23,8 +23,8 @@ export interface DispatchDeps {
     req: Extract<Request, { action: "status" }>,
     folder: FolderMapping,
   ) => Promise<StatusDeps>;
-  /** Gate trust + the build confirmation, naming where the build runs; false when declined. */
-  confirmBuild: (profile: string, folderHostPath: string) => Promise<boolean>;
+  /** Gate trust + the build confirmation, naming where it runs and a clean build; false when declined. */
+  confirmBuild: (profile: string, folderHostPath: string, clean: boolean) => Promise<boolean>;
   /** Gate trust alone, for the non-build actions. */
   ensureTrusted: () => Promise<boolean>;
   buildDeps: (folderHostPath: string) => Promise<BuildDeps>;
@@ -70,10 +70,11 @@ export async function dispatch(request: unknown, deps: DispatchDeps): Promise<Re
     const at = folder.folderHostPath;
 
     if (req.action === "build") {
-      if (!(await deps.confirmBuild(req.profile, at))) {
+      const clean = req.clean === true;
+      if (!(await deps.confirmBuild(req.profile, at, clean))) {
         return { ok: false, error: { code: "build-declined", message: "build not confirmed" } };
       }
-      return ok(await build(req.profile, await deps.buildDeps(at), { clean: req.clean === true }));
+      return ok(await build(req.profile, await deps.buildDeps(at), { clean }));
     }
 
     if (!(await deps.ensureTrusted())) {
