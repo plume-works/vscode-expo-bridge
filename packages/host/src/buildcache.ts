@@ -54,11 +54,128 @@ function writeAtomic(dest: string, write: (tmp: string) => void): void {
   }
 }
 
+/** How long `store` waits for a folder's index lock, and how often it retries. */
+export const LOCK_WAIT_MS = 10_000;
+export const LOCK_RETRY_MS = 50;
+/** A lock older than this is abandoned whether or not its owner still runs. */
+export const LOCK_STALE_MS = 60_000;
+
+export interface LockOptions {
+  waitMs?: number;
+  retryMs?: number;
+  staleMs?: number;
+  /** Runs while the lock is held, between reading and writing the index; tests use it. */
+  whileLocked?: () => Promise<void>;
+}
+
+function processAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (e) {
+    // EPERM: the process exists under another user
+    return (e as NodeJS.ErrnoException).code === "EPERM";
+  }
+}
+
+function isStale(lockPath: string, staleMs: number): boolean {
+  let st: fs.Stats;
+  let owner: number;
+  try {
+    st = fs.statSync(lockPath);
+    owner = Number(fs.readFileSync(lockPath, "utf8"));
+  } catch {
+    // gone between the failed create and this check: retry the create
+    return false;
+  }
+  if (Date.now() - st.mtimeMs > staleMs) return true;
+  return Number.isInteger(owner) && owner > 0 && !processAlive(owner);
+}
+
+/**
+ * Run `fn` holding `<dir>/index.lock`, an O_EXCL file naming this process, so index updates
+ * from every host extension process serialize. Returns null when the lock is not had in time.
+ */
+async function withIndexLock<T>(
+  dir: string,
+  o: LockOptions,
+  fn: () => Promise<T>,
+): Promise<T | null> {
+  const lockPath = path.join(dir, "index.lock");
+  const deadline = Date.now() + (o.waitMs ?? LOCK_WAIT_MS);
+  let ino: number;
+  for (;;) {
+    try {
+      const fd = fs.openSync(
+        lockPath,
+        fs.constants.O_CREAT | fs.constants.O_EXCL | fs.constants.O_WRONLY,
+        0o600,
+      );
+      try {
+        fs.writeSync(fd, String(process.pid));
+        ino = fs.fstatSync(fd).ino;
+      } finally {
+        fs.closeSync(fd);
+      }
+      break;
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code !== "EEXIST") throw e;
+    }
+    if (isStale(lockPath, o.staleMs ?? LOCK_STALE_MS)) {
+      takeOver(lockPath, o.staleMs ?? LOCK_STALE_MS);
+      continue;
+    }
+    if (Date.now() >= deadline) return null;
+    await new Promise((r) => setTimeout(r, o.retryMs ?? LOCK_RETRY_MS));
+  }
+  try {
+    return await fn();
+  } finally {
+    // only our own lock: a taken-over one belongs to another process now
+    if (safeIno(lockPath) === ino) fs.rmSync(lockPath, { force: true });
+  }
+}
+
+function safeIno(p: string): number | null {
+  try {
+    return fs.statSync(p).ino;
+  } catch {
+    // no lock file: nothing to compare
+    return null;
+  }
+}
+
+/**
+ * Move a stale lock aside and delete it. Two processes may both find it stale; the one whose
+ * rename caught a fresh lock instead puts that lock back, so no live owner loses it.
+ */
+function takeOver(lockPath: string, staleMs: number): void {
+  const aside = `${lockPath}.stale-${randomBytes(6).toString("hex")}`;
+  try {
+    fs.renameSync(lockPath, aside);
+  } catch {
+    // another process moved it first
+    return;
+  }
+  if (isStale(aside, staleMs)) {
+    fs.rmSync(aside, { force: true });
+    return;
+  }
+  try {
+    fs.linkSync(aside, lockPath);
+  } catch {
+    // a newer lock already took the name; the moved one's owner will find its lock gone
+  } finally {
+    fs.rmSync(aside, { force: true });
+  }
+}
+
 export interface BuildCacheDeps {
   runner: Runner;
   env: Record<string, string>;
   /** The Mac's tar, which lists an archive's entries before it is stored. */
   tar: string;
+  lock?: LockOptions;
 }
 
 export class BuildCache {
@@ -102,8 +219,8 @@ export class BuildCache {
   }
 
   /**
-   * Store an artifact under `key`, keeping the newest MAX_ENTRIES. Refuses, returning false,
-   * an archive tar cannot list or one that embeds a JavaScript bundle (`main.jsbundle`).
+   * Store an artifact under `key`, keeping the newest MAX_ENTRIES. Returns false for an archive
+   * tar cannot list, one that embeds `main.jsbundle`, or when the index lock is not had in time.
    */
   async store(key: string, artifact: string, builtAt: number): Promise<boolean> {
     if (!KEY_RE.test(key)) return false;
@@ -113,17 +230,22 @@ export class BuildCache {
     if (names.some((n) => path.posix.basename(n) === "main.jsbundle")) return false;
 
     fs.mkdirSync(this.dir, { recursive: true, mode: 0o700 });
-    const file = `${key}.tar.gz`;
-    writeAtomic(path.join(this.dir, file), (tmp) => fs.copyFileSync(artifact, tmp));
-
-    const idx = this.readIndex();
-    idx.entries[key] = { file, builtAt };
-    const ranked = Object.entries(idx.entries).sort(([, a], [, b]) => b.builtAt - a.builtAt);
-    for (const [old, entry] of ranked.slice(MAX_ENTRIES)) {
-      delete idx.entries[old];
-      fs.rmSync(path.join(this.dir, path.basename(entry.file)), { force: true });
-    }
-    this.writeIndex(idx);
-    return true;
+    const o = this.d.lock ?? {};
+    // The copy is inside the lock too, so a build that never gets it leaves no file behind.
+    const stored = await withIndexLock(this.dir, o, async () => {
+      const file = `${key}.tar.gz`;
+      writeAtomic(path.join(this.dir, file), (tmp) => fs.copyFileSync(artifact, tmp));
+      const idx = this.readIndex();
+      await o.whileLocked?.();
+      idx.entries[key] = { file, builtAt };
+      const ranked = Object.entries(idx.entries).sort(([, a], [, b]) => b.builtAt - a.builtAt);
+      for (const [old, entry] of ranked.slice(MAX_ENTRIES)) {
+        delete idx.entries[old];
+        fs.rmSync(path.join(this.dir, path.basename(entry.file)), { force: true });
+      }
+      this.writeIndex(idx);
+      return true;
+    });
+    return stored === true;
   }
 }

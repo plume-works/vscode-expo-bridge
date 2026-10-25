@@ -2,12 +2,13 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { realRunner } from "../src/exec";
 import {
   BuildCache,
   folderCacheDir,
   hostPathCacheDir,
+  LOCK_STALE_MS,
   MAX_ENTRIES,
   remove,
 } from "../src/buildcache";
@@ -135,5 +136,86 @@ describe("BuildCache", () => {
     expect(fs.existsSync(hostPathCacheDir(storage, HOST))).toBe(false);
     expect(cache(HOST, FOLDER).lookup(key(1))).toBeNull();
     expect(cache("/Users/me/other", FOLDER).lookup(key(1))).not.toBeNull();
+  });
+});
+
+describe("the index lock", () => {
+  const CHILD = path.join(import.meta.dir, "fixtures", "store-child.ts");
+
+  /** Run one store in a separate bun process; resolves with its stdout. */
+  function storeInProcess(k: string, builtAt: number, art: string, holdMs = 0): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const child = spawn(process.execPath, [
+        CHILD,
+        storage,
+        HOST,
+        FOLDER,
+        k,
+        String(builtAt),
+        art,
+        String(holdMs),
+      ]);
+      let out = "";
+      child.stdout.on("data", (d) => (out += d));
+      child.on("error", reject);
+      child.on("exit", (code) => (code === 0 ? resolve(out.trim()) : reject(new Error(out))));
+    });
+  }
+
+  const lockPath = () => path.join(cache().dir, "index.lock");
+  const holdLock = (pid: number, ageMs = 0) => {
+    fs.mkdirSync(cache().dir, { recursive: true });
+    fs.writeFileSync(lockPath(), String(pid));
+    const t = (Date.now() - ageMs) / 1000;
+    fs.utimesSync(lockPath(), t, t);
+  };
+
+  test("two processes storing in one folder at once keep both entries", async () => {
+    const art = archive("a", ["Info.plist"]);
+    // the first holds the lock between reading and writing the index, so an unlocked
+    // second store would read the empty index and one write would drop the other's entry
+    const first = storeInProcess(key(1), 1, art, 600);
+    await new Promise((r) => setTimeout(r, 300));
+    const second = storeInProcess(key(2), 2, art);
+    expect(await Promise.all([first, second])).toEqual(["stored", "stored"]);
+    expect(cache().lookup(key(1))).not.toBeNull();
+    expect(cache().lookup(key(2))).not.toBeNull();
+    expect(fs.existsSync(lockPath())).toBe(false);
+  });
+
+  test("takes over a lock whose owner process is gone", async () => {
+    const dead = spawnSync("true").pid!;
+    holdLock(dead);
+    expect(await cache().store(key(1), archive("a", ["Info.plist"]), 1)).toBe(true);
+    expect(cache().lookup(key(1))).not.toBeNull();
+    expect(fs.existsSync(lockPath())).toBe(false);
+  });
+
+  test("takes over an expired lock even when its owner still runs", async () => {
+    holdLock(process.pid, LOCK_STALE_MS + 1000);
+    expect(await cache().store(key(1), archive("a", ["Info.plist"]), 1)).toBe(true);
+    expect(fs.existsSync(lockPath())).toBe(false);
+  });
+
+  test("stores nothing when a live lock outlasts the wait, and leaves that lock alone", async () => {
+    holdLock(process.pid);
+    const c = new BuildCache(storage, HOST, FOLDER, {
+      runner: realRunner,
+      env: { PATH: process.env.PATH ?? "" },
+      tar: "tar",
+      lock: { waitMs: 150, retryMs: 20 },
+    });
+    expect(await c.store(key(1), archive("a", ["Info.plist"]), 1)).toBe(false);
+    expect(c.lookup(key(1))).toBeNull();
+    expect(fs.readdirSync(c.dir).sort()).toEqual(["index.lock"]);
+    expect(fs.readFileSync(lockPath(), "utf8")).toBe(String(process.pid));
+  });
+
+  test("removes the lock when the index update fails", async () => {
+    const c = cache();
+    // a non-empty directory where index.json goes makes its rename fail
+    fs.mkdirSync(path.join(c.dir, "index.json", "x"), { recursive: true });
+    await expect(c.store(key(1), archive("a", ["Info.plist"]), 1)).rejects.toThrow();
+    expect(fs.existsSync(lockPath())).toBe(false);
   });
 });
