@@ -9,7 +9,7 @@ import { decodeHostPath, type ResolvedHost } from "./hostpath";
 import { captureLoginEnv, lookupDocker, withHomebrewPath } from "./env";
 import { realRunner } from "./exec";
 import { resolveFolder, type FolderMapping } from "./folder";
-import { FixNotices, fixSummary, planFixes, type FixStep } from "./fix";
+import { FixNotices, fixSummary, noCommandMessage, planFixes, type FixStep } from "./fix";
 import { findShadowedBun, resolveBunFix, ShadowNotes, shadowNoteText } from "./bunfix";
 import { FixGate, runCommands, type RunCommand } from "./fixrun";
 import { fixTerminalShell } from "./shell";
@@ -376,10 +376,9 @@ export function activate(context: vscode.ExtensionContext): void {
         { title: "Expo Bridge: pick a fix to run", canPickMany: false, ignoreFocusOut: true },
       );
       if (!pick) return;
-      if (!pick.step.commands.length) {
-        void vscode.window.showInformationMessage(
-          `Expo Bridge: ${pick.step.detail ?? pick.step.label}.`,
-        );
+      const message = noCommandMessage(pick.step);
+      if (message) {
+        void vscode.window.showInformationMessage(message);
         return;
       }
       if (pick.step.openUrl) {

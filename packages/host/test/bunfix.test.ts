@@ -64,6 +64,14 @@ describe("resolveBunFix", () => {
     });
   });
 
+  test("a PATH entry with a trailing slash still names the bun.sh install", () => {
+    const m = mac([`${HOME}/.bun/bin//bun`]);
+    expect(resolveBunFix({ PATH: `${HOME}/.bun/bin/` }, m.exists, m.realpath, HOME)).toEqual({
+      path: BUNSH_BUN,
+      commands: [`'${BUNSH_BUN}' upgrade`],
+    });
+  });
+
   test("BUN_INSTALL moves the bun.sh install", () => {
     const m = mac(["/opt/bun/bin/bun"]);
     const env = { PATH: "/opt/bun/bin", BUN_INSTALL: "/opt/bun" };

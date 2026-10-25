@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { StatusResult } from "@plume-works/expo-bridge-protocol";
 import { PROTOCOL_VERSION } from "@plume-works/expo-bridge-protocol";
-import { FixNotices, fixSummary, planFixes } from "../src/fix";
+import { FixNotices, fixSummary, noCommandMessage, planFixes } from "../src/fix";
 
 function statusWith(
   overrides: Partial<Record<keyof StatusResult["checks"], boolean>>,
@@ -98,6 +98,24 @@ describe("planFixes", () => {
       }),
     );
     expect(steps).toEqual([]);
+  });
+});
+
+describe("noCommandMessage", () => {
+  test("a step with no command shows its detail instead of a terminal", () => {
+    const [step] = planFixes(statusWith({ bun: false }), {
+      path: "/Users/me/.local/share/mise/shims/bun",
+      commands: [],
+      detail: "/Users/me/.local/share/mise/shims/bun is not a Homebrew or bun.sh install",
+    });
+    expect(noCommandMessage(step!)).toBe(
+      "Expo Bridge: /Users/me/.local/share/mise/shims/bun is not a Homebrew or bun.sh install.",
+    );
+  });
+
+  test("a step with commands opens a terminal", () => {
+    const [step] = planFixes(statusWith({ bun: false }));
+    expect(noCommandMessage(step!)).toBeNull();
   });
 });
 

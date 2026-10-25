@@ -68,6 +68,11 @@ function joinDetails(...details: (string | undefined)[]): string | undefined {
   return present.length ? present.join("; ") : undefined;
 }
 
+/** What picking `step` shows instead of a terminal: its detail when it has no command. */
+export function noCommandMessage(step: FixStep): string | null {
+  return step.commands.length ? null : `Expo Bridge: ${step.detail ?? step.label}.`;
+}
+
 /** The status bar text and tooltip for pending fixes; null when there is nothing to fix. */
 export function fixSummary(steps: FixStep[]): { text: string; tooltip: string } | null {
   if (!steps.length) return null;

@@ -38,8 +38,10 @@ export function resolveBunFix(
   realpath: (p: string) => string,
   home: string,
 ): BunFix {
-  const resolved = lookupTool("bun", env, exists);
-  if (!resolved) return { path: null, commands: ["brew install oven-sh/bun/bun"] };
+  const found = lookupTool("bun", env, exists);
+  if (!found) return { path: null, commands: ["brew install oven-sh/bun/bun"] };
+  // A PATH entry may end in a slash or hold `.` segments.
+  const resolved = path.normalize(found);
   if (realpath(resolved).startsWith(HOMEBREW_CELLAR)) {
     return { path: resolved, commands: ["brew upgrade bun"] };
   }
