@@ -1,5 +1,8 @@
 import * as path from "node:path";
 import { lookupTool } from "./env";
+import type { Runner } from "./exec";
+import { versionGte } from "./status";
+import type { Memento } from "./trust";
 
 /** Where Homebrew keeps installed formulae on an Apple silicon Mac. */
 export const HOMEBREW_CELLAR = "/opt/homebrew/Cellar/";
@@ -48,4 +51,81 @@ export function resolveBunFix(
     commands: [],
     detail: `${resolved} is not a Homebrew or bun.sh install; update it, or put a newer bun first on PATH`,
   };
+}
+
+/** A bun later on the PATH that already meets the container's version. */
+export interface ShadowedBun {
+  resolved: { path: string; version: string | null };
+  shadowed: { path: string; version: string };
+}
+
+/** Every `tool` on the PATH, in PATH order. */
+function lookupAll(tool: string, env: Record<string, string>, exists: (p: string) => boolean) {
+  const found: string[] = [];
+  for (const dir of (env.PATH ?? "").split(":")) {
+    if (dir === "") continue;
+    const candidate = `${dir}/${tool}`;
+    if (exists(candidate) && !found.includes(candidate)) found.push(candidate);
+  }
+  return found;
+}
+
+async function bunVersion(runner: Runner, bun: string, env: Record<string, string>) {
+  const r = await runner.run(bun, ["--version"], { env });
+  return r.code === 0 ? r.stdout.trim() : null;
+}
+
+/**
+ * The first bun after the resolved one on the PATH, not the same binary, whose version
+ * meets the container's; null when there is none or the container's version is unknown.
+ */
+export async function findShadowedBun(
+  env: Record<string, string>,
+  exists: (p: string) => boolean,
+  realpath: (p: string) => string,
+  runner: Runner,
+  containerBunVersion: string | undefined,
+): Promise<ShadowedBun | null> {
+  if (!containerBunVersion) return null;
+  const [resolved, ...later] = lookupAll("bun", env, exists);
+  if (!resolved) return null;
+  const resolvedReal = realpath(resolved);
+  for (const candidate of later) {
+    if (realpath(candidate) === resolvedReal) continue;
+    const version = await bunVersion(runner, candidate, env);
+    if (version && versionGte(version, containerBunVersion)) {
+      return {
+        resolved: { path: resolved, version: await bunVersion(runner, resolved, env) },
+        shadowed: { path: candidate, version },
+      };
+    }
+  }
+  return null;
+}
+
+/** The one-time notice for a shadowed bun. */
+export function shadowNoteText(s: ShadowedBun): string {
+  const resolved = s.resolved.version
+    ? `${s.resolved.path} ${s.resolved.version}`
+    : s.resolved.path;
+  return (
+    `Expo Bridge: ${resolved} comes before ${s.shadowed.path} ${s.shadowed.version} ` +
+    `on the Mac's PATH, so the bun fix upgrades ${s.resolved.path}.`
+  );
+}
+
+const SHADOW_NOTES_KEY = "expoBridge.bunShadowNotes"; // ["<resolved>\0<shadowed>", ...]
+
+/** Remembers, in the host's globalState, which resolved-and-shadowed pairs were noted. */
+export class ShadowNotes {
+  constructor(private readonly state: Memento) {}
+
+  /** True the first time a pair is seen, recording it; false for a pair already noted. */
+  async take(s: ShadowedBun): Promise<boolean> {
+    const key = `${s.resolved.path}\0${s.shadowed.path}`;
+    const noted = this.state.get<string[]>(SHADOW_NOTES_KEY) ?? [];
+    if (noted.includes(key)) return false;
+    await this.state.update(SHADOW_NOTES_KEY, [...noted, key]);
+    return true;
+  }
 }
