@@ -23,9 +23,12 @@ user's consent:
   trust; any other answer records a decline. Both are stored in the host extension's
   `globalState`, keyed by host path. A declined workspace fails every request without
   prompting again until the decision is revoked with **Expo Bridge: Manage Trusted
-  Workspaces**, which lists and revokes allowed and declined workspaces alike.
+  Workspaces**, which lists and revokes allowed and declined workspaces alike. Revoking a
+  host path's decision also deletes the build cache of every folder under it.
 - **A confirmation before every `build`.** The modal names the profile and the folder's
   Mac path, and states that project code will run on the Mac with the user's privileges.
+  It names a clean build when `clean` is set, and otherwise says a matching earlier build
+  may be reused.
   Its answers are "Allow once", "Allow and don't ask for an hour", and "Allow and don't ask
   today". A cooldown applies to that workspace's host path, whichever of its folders
   builds, and is stored in `globalState`; **Expo Bridge: Ask Before Every Build** ends it
@@ -47,7 +50,9 @@ user's consent:
   and the build confirmation are the only gate on it.
 - **No project code outside `build`.** The host extension reads `eas.json` and `app.json`
   as JSON only, refusing a symlink, a non-regular file, or a file over 1 MiB, and never
-  evaluates a project file as code. No error returned to the container quotes the contents
+  evaluates a project file as code. The fingerprint step that decides reuse evaluates
+  project code, so it runs only inside a `build` that passed trust and the confirmation,
+  never in `status` or another action. No error returned to the container quotes the contents
   of a file the host read.
 - **Management commands change nothing on their own.** Setting or clearing the token,
   managing trust, asking before every build again, and the one-click fix take no arguments,
@@ -92,13 +97,13 @@ container, and any other `action` is answered with `bad-request`. Every request 
 carries `folder` (string), the container path of the workspace folder it acts on; a
 request without an absolute `folder` is answered with `bad-request`.
 
-| Action       | Request fields                  | Result                              | Prompts                   |
-| ------------ | ------------------------------- | ----------------------------------- | ------------------------- |
-| `status`     | `containerBunVersion?` (string) | `StatusResult`                      | trust, when undecided     |
-| `build`      | `profile` (string)              | `{ artifactRel, logRel, exitCode }` | trust, build confirmation |
-| `install`    | `artifactRel` (string)          | `{ bundleIdentifier }`              | trust                     |
-| `launch`     | —                               | `{ bundleIdentifier }`              | trust                     |
-| `screenshot` | —                               | `{ screenshotRel }`                 | trust                     |
+| Action       | Request fields                         | Result                                                              | Prompts                   |
+| ------------ | -------------------------------------- | ------------------------------------------------------------------- | ------------------------- |
+| `status`     | `containerBunVersion?` (string)        | `StatusResult`                                                      | trust, when undecided     |
+| `build`      | `profile` (string), `clean?` (boolean) | `{ artifactRel, logRel, exitCode, mode?, reason?, reusedBuiltAt? }` | trust, build confirmation |
+| `install`    | `artifactRel` (string)                 | `{ bundleIdentifier }`                                              | trust                     |
+| `launch`     | —                                      | `{ bundleIdentifier }`                                              | trust                     |
+| `screenshot` | —                                      | `{ screenshotRel }`                                                 | trust                     |
 
 ### The workspace folder
 
@@ -172,6 +177,63 @@ directory in the host extension's private global storage. The log streams into a
 is copied into `.tmp/expo-bridge/` when the build ends. A build that exits non-zero still
 succeeds as an action and reports its `exitCode`; `artifactRel` is empty when no artifact
 was produced. The host never runs `eas init`.
+
+#### Reuse of a matching development build
+
+A development build loads its JavaScript from Metro, so its artifact depends only on native
+inputs. Without `clean`, after the profile and eas-cli checks, the host computes a cache key
+and returns the folder's stored artifact when an entry for that key exists, without running
+eas-cli:
+
+1. **The fingerprint step.** The host runs a fixed script with the Mac's `node`, in the
+   folder's Mac path, that loads the project's own `expo/fingerprint` — as eas-cli does
+   inside every build — and prints the hash of
+   `createFingerprintAsync(<folder's Mac path>, { platforms: ["ios"] })`. A missing `node`,
+   a non-zero exit, or output that is not one lowercase 40-digit hex hash means no
+   fingerprint.
+2. **The cache key** is the SHA-256 of a record naming the fingerprint hash, the profile,
+   the SHA-256 of `eas.json`, `package.json`, and each present lockfile (`bun.lock`,
+   `bun.lockb`, `package-lock.json`, `yarn.lock`, `pnpm-lock.yaml`), the output of
+   `bunx eas-cli@<spec> --version`, the output of `xcodebuild -version`, and the host
+   extension's version. Each file is read as bytes from the folder's Mac path and refused
+   when a path component is a symlink, the file is not regular, or it is over 64 MiB. A
+   refusal, a missing `eas.json` or `package.json`, or a failed version probe means no key.
+3. **The cache** lives in the host extension's private global storage under
+   `build-cache/<sha256 of the host path>/<sha256 of the folder's Mac path>/`: an
+   `index.json` recording both paths and, per key, the artifact file and when it was
+   built, plus one artifact per key. The directory comes from the trusted host path and the
+   mapped folder only; the container never names a cache directory or a key. Each folder
+   keeps its five newest entries, so two apps under one host path never share one.
+
+On a hit, the host copies the stored artifact into a fresh
+`.tmp/expo-bridge/build-<ms>.tar.gz`, so `eas-host install` with no path picks it, and
+returns `mode: "reused"`, `exitCode: 0`, and `reusedBuiltAt`, the epoch milliseconds the
+stored build ran. Otherwise it runs the build above and returns `mode: "built"` with a
+`reason`: `no-match` when no entry has the key, `no-fingerprint` when there is no
+fingerprint or no key, and `clean-requested` when `clean` is set. With `clean` the host
+skips the lookup and computes the key after the build.
+
+A build that exited 0 and produced an artifact is stored under its key, unless `tar -tzf`
+cannot list the artifact or it contains a `main.jsbundle` — a build that embeds its
+JavaScript bundle, such as a Release build, is never stored or reused. The artifact and
+`index.json` are written through a temporary file and a rename, so no reader sees a partial
+entry. The copy and the update of `index.json` hold `index.lock` in the folder's cache
+directory, a file created with `O_CREAT | O_EXCL` that names its process, so builds in one
+folder — from one VS Code window or several, each its own host extension process — never
+drop each other's entries; the build itself never holds it. A lock whose process no longer
+exists, or that is older than 60 s, is taken over. A build that cannot take the lock within
+10 s stores nothing, and its log says so. Every build, reused or not, writes its log, which
+names the fingerprint hash, the key, and the outcome, and never a file's contents.
+
+The fingerprint is a correctness hint, not a security input: project code
+(`app.config.js`, `fingerprint.config.js`) can force a match, and the worst outcome is a
+stale artifact this folder's own confirmed build produced. Inputs outside the key — EAS
+server-side environment variables, the Mac login environment, the macOS and simulator
+runtime versions — need `clean` after they change.
+
+The protocol version stays `2`: a host without reuse ignores `clean` and always builds in
+full, which is what `clean` asks for, and an `eas-host` without reuse ignores `mode`,
+`reason`, and `reusedBuiltAt`.
 
 ### `install`
 
@@ -248,7 +310,7 @@ then copies the PNG to a fresh `.tmp/expo-bridge/screenshot-<ms>.png`.
 ## `eas-host`
 
 ```
-eas-host status | build <profile> | install [path] | launch | screenshot | --help
+eas-host status | build <profile> [--clean] | install [path] | launch | screenshot | --help
 ```
 
 The workspace extension installs it into `~/.local/bin` when it activates in a workspace
@@ -259,7 +321,9 @@ line of JSON on stdout and build log lines on stderr.
 
 An agent runs the actions in order: `status`, `build <profile>`, `install`, `launch`,
 `screenshot`. `build` returns the artifact's folder-relative path under
-`.tmp/expo-bridge/` as `artifactRel`. `install` with no path installs the newest build
+`.tmp/expo-bridge/` as `artifactRel`, reusing an earlier development build when its native
+inputs are unchanged (`mode: "reused"`); `build <profile> --clean` sends `clean: true` for a
+full build, and any other argument after the profile is a usage error. `install` with no path installs the newest build
 artifact there — the newest file that is neither a `build-*.log` nor a `screenshot-*.png`;
 the workspace extension resolves it before forwarding, so the host always receives a path,
 and with no artifact it answers `not-found`. `launch` of a development build loads the

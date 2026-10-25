@@ -31,7 +31,20 @@ export interface Prompts {
     hostPath: string,
     profile: string,
     folderHostPath: string,
+    clean: boolean,
   ): Thenable<BuildDecision | undefined>;
+}
+
+/** The build confirmation's message: a clean build says so; any other may reuse an artifact. */
+export function buildConfirmationText(
+  profile: string,
+  folderHostPath: string,
+  clean: boolean,
+): string {
+  const what = clean
+    ? `Run a clean "${profile}" Expo build on this Mac? It builds in full, reusing no earlier build.`
+    : `Run the "${profile}" Expo build on this Mac? A matching earlier build may be reused.`;
+  return `${what} Project code will run with your privileges.\n\n${folderHostPath}`;
 }
 
 const TRUST_KEY = "expoBridge.trust"; // host path -> "allow" | "decline"
@@ -49,6 +62,8 @@ export class TrustStore {
     private readonly secrets: SecretStore,
     private readonly prompts: Prompts,
     private readonly now: () => number = Date.now,
+    /** Runs after a host path's decision is revoked; the extension deletes its build cache. */
+    private readonly onRevoke: (hostPath: string) => void = () => {},
   ) {}
 
   private trustMap(): TrustMap {
@@ -77,6 +92,7 @@ export class TrustStore {
     const cd = this.cooldownMap();
     delete cd[hostPath];
     await this.state.update(COOLDOWN_KEY, cd);
+    this.onRevoke(hostPath);
   }
 
   /**
@@ -104,12 +120,13 @@ export class TrustStore {
     hostPath: string,
     profile: string,
     folderHostPath: string = hostPath,
+    clean = false,
   ): Promise<boolean> {
     if (!(await this.ensureTrusted(hostPath))) return false;
     const until = this.cooldownMap()[hostPath] ?? 0;
     if (until > this.now()) return true;
 
-    const answer = await this.prompts.build(hostPath, profile, folderHostPath);
+    const answer = await this.prompts.build(hostPath, profile, folderHostPath, clean);
     if (answer === undefined || answer === "decline") return false;
     if (answer === "hour" || answer === "today") {
       const span = answer === "hour" ? HOUR_MS : endOfTodayMs(this.now()) - this.now();

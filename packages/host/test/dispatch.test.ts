@@ -81,8 +81,10 @@ function deps(partial: Partial<DispatchDeps> = {}): DispatchDeps {
     confirmBuild: async () => true,
     ensureTrusted: async () => true,
     buildDeps: async (folderHostPath) => ({
+      hostPath,
       folderHostPath,
       globalStorage: storage,
+      hostVersion: "0.3.0",
       env: { PATH: BINS },
       token: "t",
       runner: {
@@ -162,6 +164,31 @@ describe("dispatch", () => {
       },
     );
     expect(trustCalled).toBe(false);
+  });
+
+  test("a build request's clean reaches the build, and only true counts", async () => {
+    for (const [clean, reason] of [
+      [true, "clean-requested"],
+      [undefined, "no-fingerprint"],
+      ["yes", "no-fingerprint"],
+    ] as const) {
+      const r = await dispatch(
+        { action: "build", profile: "development", folder: FOLDER, clean } as never,
+        deps(),
+      );
+      expect(r.ok && (r.result as { reason?: string }).reason).toBe(reason);
+    }
+  });
+
+  test("the build confirmation learns whether the build is clean", async () => {
+    const seen: boolean[] = [];
+    for (const clean of [true, undefined]) {
+      await dispatch(
+        { action: "build", profile: "development", folder: FOLDER, clean },
+        deps({ confirmBuild: async (_p, _f, c) => (seen.push(c), false) }),
+      );
+    }
+    expect(seen).toEqual([true, false]);
   });
 
   test("a declined build confirmation returns build-declined and never runs the build", async () => {

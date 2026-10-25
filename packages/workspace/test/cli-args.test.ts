@@ -21,6 +21,26 @@ describe("parseArgs", () => {
     expect(() => parseArgs(["build"])).toThrow(UsageError);
   });
 
+  test("build --clean asks for a clean build; without it the field is absent", () => {
+    expect(parseArgs(["build", "development", "--clean"])).toEqual({
+      action: "build",
+      profile: "development",
+      clean: true,
+    });
+    expect("clean" in parseArgs(["build", "development"])).toBe(false);
+  });
+
+  test("build rejects any other argument after the profile", () => {
+    for (const argv of [
+      ["build", "development", "--force"],
+      ["build", "development", "extra"],
+      ["build", "development", "--clean", "--clean"],
+      ["build", "--clean"],
+    ]) {
+      expect(() => parseArgs(argv)).toThrow(UsageError);
+    }
+  });
+
   test("install takes an optional path", () => {
     expect(parseArgs(["install", ".tmp/expo-bridge/a.tar.gz"])).toEqual({
       action: "install",
@@ -58,6 +78,9 @@ describe("help", () => {
     expect(HELP).toContain("newest build artifact");
     expect(HELP).toContain("bunx expo start --dev-client --localhost --port 8081");
     expect(HELP).toContain("Run it inside the Expo app's workspace folder");
+    expect(HELP).toContain("build <profile> [--clean]");
+    expect(HELP).toContain("reuses an earlier artifact when the native");
+    expect(HELP).toContain("--clean forces a full build");
   });
 });
 

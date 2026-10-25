@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, test } from "bun:test";
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
+import { folderCacheDir, hostPathCacheDir, remove as removeBuildCache } from "../src/buildcache";
 import type { BuildDecision, Prompts, SecretStore, TrustDecision } from "../src/trust";
-import { BUILD_ANSWERS, TrustStore } from "../src/trust";
+import { BUILD_ANSWERS, buildConfirmationText, TrustStore } from "../src/trust";
 
 class FakeMemento {
   private store = new Map<string, unknown>();
@@ -232,5 +236,84 @@ describe("clearCooldown", () => {
     await store.confirmBuild(HOST, "development");
     clock += 61 * 60 * 1000;
     expect(store.hasCooldown(HOST)).toBe(false);
+  });
+});
+
+describe("a clean build", () => {
+  test("the confirmation text names a clean build, and otherwise says one may be reused", () => {
+    const clean = buildConfirmationText("development", `${HOST}/apps/mobile`, true);
+    expect(clean).toContain('clean "development" Expo build');
+    expect(clean).toContain("reusing no earlier build");
+    expect(clean).not.toContain("may be reused");
+    const plain = buildConfirmationText("development", `${HOST}/apps/mobile`, false);
+    expect(plain).toContain("A matching earlier build may be reused");
+    expect(plain).not.toContain("clean");
+    for (const text of [clean, plain]) {
+      expect(text).toContain("Project code will run with your privileges.");
+      expect(text.endsWith(`\n\n${HOST}/apps/mobile`)).toBe(true);
+    }
+  });
+
+  test("the prompt learns whether the build is clean", async () => {
+    const seen: boolean[] = [];
+    const p: Prompts = {
+      trust: async () => "allow",
+      build: async (_h, _p, _f, clean) => (seen.push(clean), "once"),
+    };
+    const store = new TrustStore(state, secrets, p, () => clock);
+    await store.confirmBuild(HOST, "development", HOST, true);
+    await store.confirmBuild(HOST, "development", HOST);
+    expect(seen).toEqual([true, false]);
+  });
+
+  test("a cooldown covers a clean build as it covers any build", async () => {
+    let asked = 0;
+    const p: Prompts = { trust: async () => "allow", build: async () => (asked++, "hour") };
+    const store = new TrustStore(state, secrets, p, () => clock);
+    expect(await store.confirmBuild(HOST, "development")).toBe(true);
+    expect(await store.confirmBuild(HOST, "development", HOST, true)).toBe(true);
+    expect(asked).toBe(1);
+  });
+});
+
+describe("revoking trust", () => {
+  test("with the extension's hook, leaves no build cache for any folder under the host path", async () => {
+    const storage = fs.mkdtempSync(path.join(os.tmpdir(), "expo-bridge-revoke-"));
+    try {
+      const folders = [
+        folderCacheDir(storage, HOST, HOST),
+        folderCacheDir(storage, HOST, `${HOST}/apps/web`),
+      ];
+      for (const dir of folders) fs.mkdirSync(dir, { recursive: true });
+      const kept = folderCacheDir(storage, OTHER, OTHER);
+      fs.mkdirSync(kept, { recursive: true });
+      const store = new TrustStore(
+        state,
+        secrets,
+        prompts("allow", "once"),
+        () => clock,
+        (h) => removeBuildCache(storage, h),
+      );
+      await store.ensureTrusted(HOST);
+      await store.revoke(HOST);
+      expect(fs.existsSync(hostPathCacheDir(storage, HOST))).toBe(false);
+      expect(fs.existsSync(kept)).toBe(true);
+    } finally {
+      fs.rmSync(storage, { recursive: true, force: true });
+    }
+  });
+
+  test("hands the revoked host path to onRevoke, which deletes its build cache", async () => {
+    const revoked: string[] = [];
+    const store = new TrustStore(
+      state,
+      secrets,
+      prompts("allow", "once"),
+      () => clock,
+      (h) => revoked.push(h),
+    );
+    await store.ensureTrusted(HOST);
+    await store.revoke(HOST);
+    expect(revoked).toEqual([HOST]);
   });
 });
