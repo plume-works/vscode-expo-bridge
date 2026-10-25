@@ -28,6 +28,26 @@ working directory, so run it inside the Expo app's folder.
 The bridge is a consent surface, not a security boundary — see the protocol and threat
 model in `docs/protocol.md`.
 
+## VSCodium
+
+VSCodium cannot use Microsoft's Dev Containers extension. The host extension finds the
+workspace's Mac folder from a `dev-container+<hex>` remote authority carrying `hostPath`, so
+only a dev container extension that produces that authority works with the bridge.
+
+- **`s-h-a-d-o-w.dev-containers-oss` works.** On VSCodium 140 and later, add
+  `"enable-proposed-api": ["s-h-a-d-o-w.dev-containers-oss"]` to `argv.json` (**Preferences:
+  Configure Runtime Arguments**), then quit and restart VSCodium. The full action set, the
+  trust prompt, the build confirmation, Metro on port 8081, and the one-click fix from the
+  notification and the status bar item then work as in VS Code. The extension ignores the
+  `"onAutoForward": "silent"` port attribute, so the forwarded-port notification for 8081
+  still shows.
+- **These do not work:**
+  - `DDorch.codium-devcontainer` runs `postCreateCommand` as a Docker build step, before the
+    workspace is mounted.
+  - `mythreyak.open-remote-devcontainer` does not connect.
+  - `3timeslazy.vscodium-devpodcontainers` and `zwhy2025.open-dev-container` connect over
+    SSH, whose remote authority carries no Mac folder path.
+
 ## Layout
 
 ```
