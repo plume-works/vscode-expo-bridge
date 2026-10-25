@@ -1,4 +1,5 @@
 import type { StatusResult } from "@plume-works/expo-bridge-protocol";
+import type { BunFix } from "./bunfix";
 
 export interface FixStep {
   /** Which failing status check this fixes. */
@@ -8,7 +9,7 @@ export interface FixStep {
   detail?: string;
   /** A guided step opens a URL and waits for the user before the commands run. */
   openUrl?: string;
-  /** Shell commands run in a visible local terminal, in order. */
+  /** Shell commands run in a visible local terminal, in order; empty when there is none. */
   commands: string[];
 }
 
@@ -16,9 +17,9 @@ export interface FixStep {
  * Map each failing status check that a tool install resolves to a fix step. A fix is only
  * ever started by the user's click — no protocol action reaches this. Checks with no
  * install remedy (trust, token, projectId, simulator, port forwarding, host path,
- * Mac host) produce no step.
+ * Mac host) produce no step. `bun` is the host's resolution of the bun the check ran.
  */
-export function planFixes(status: StatusResult): FixStep[] {
+export function planFixes(status: StatusResult, bun?: BunFix): FixStep[] {
   const steps: FixStep[] = [];
   const c = status.checks;
 
@@ -55,10 +56,16 @@ export function planFixes(status: StatusResult): FixStep[] {
     steps.push({
       check: "bun",
       label: "Install or update bun",
-      commands: ["brew install oven-sh/bun/bun"],
+      commands: bun?.commands ?? ["brew install oven-sh/bun/bun"],
+      detail: bun?.detail,
     });
   }
-  return steps.map((s) => ({ ...s, detail: c[s.check].detail }));
+  return steps.map((s) => ({ ...s, detail: joinDetails(c[s.check].detail, s.detail) }));
+}
+
+function joinDetails(...details: (string | undefined)[]): string | undefined {
+  const present = details.filter((d) => d);
+  return present.length ? present.join("; ") : undefined;
 }
 
 /** The status bar text and tooltip for pending fixes; null when there is nothing to fix. */

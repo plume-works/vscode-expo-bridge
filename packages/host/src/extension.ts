@@ -9,7 +9,8 @@ import { decodeHostPath, type ResolvedHost } from "./hostpath";
 import { captureLoginEnv, lookupDocker, withHomebrewPath } from "./env";
 import { realRunner } from "./exec";
 import { resolveFolder, type FolderMapping } from "./folder";
-import { FixNotices, fixSummary, planFixes } from "./fix";
+import { FixNotices, fixSummary, planFixes, type FixStep } from "./fix";
+import { findShadowedBun, resolveBunFix, ShadowNotes, shadowNoteText } from "./bunfix";
 import { FixGate, runCommands, type RunCommand } from "./fixrun";
 import { fixTerminalShell } from "./shell";
 import type { InstalledApp } from "./install";
@@ -43,11 +44,37 @@ const prompts = (): Prompts => ({
 });
 
 /**
+ * The fixes for a status, with the bun step resolved on the host from the bun the check ran.
+ * A bun that shadows a newer one is noted once per pair of paths.
+ */
+async function planHostFixes(
+  result: StatusResult,
+  containerBunVersion: string | undefined,
+  shadowNotes: ShadowNotes,
+): Promise<FixStep[]> {
+  if (!result.available) return [];
+  if (result.checks.bun.ok) return planFixes(result);
+  const env = await loginEnv();
+  const fileExists = (p: string) => fs.existsSync(p);
+  const bun = resolveBunFix(env, fileExists, fs.realpathSync, os.homedir());
+  const shadow = await findShadowedBun(
+    env,
+    fileExists,
+    fs.realpathSync,
+    realRunner,
+    containerBunVersion,
+  );
+  if (shadow && (await shadowNotes.take(shadow))) {
+    void vscode.window.showInformationMessage(shadowNoteText(shadow));
+  }
+  return planFixes(result, bun);
+}
+
+/**
  * Show pending fixes in a status bar item that lasts until a status has none, and notify
  * once whenever the set of failing checks changes.
  */
-function showFixes(item: vscode.StatusBarItem, notices: FixNotices, result: StatusResult): void {
-  const steps = result.available ? planFixes(result) : [];
+function showFixes(item: vscode.StatusBarItem, notices: FixNotices, steps: FixStep[]): void {
   const summary = fixSummary(steps);
   if (summary) {
     item.text = summary.text;
@@ -113,19 +140,25 @@ function resolveHostPath(): string | null {
   return resolveHost()?.hostPath ?? null;
 }
 
-/** The fix terminal's shell, resolved on the Mac from the merged terminal profile settings. */
-async function fixShell() {
-  const loginShell = process.env.SHELL ?? "/bin/zsh";
-  const env = await captureLoginEnv(loginShell).catch(() =>
+const loginShell = () => process.env.SHELL ?? "/bin/zsh";
+
+/** The Mac login environment, else the extension host's PATH with the Homebrew prefixes. */
+function loginEnv(): Promise<Record<string, string>> {
+  return captureLoginEnv(loginShell()).catch(() =>
     withHomebrewPath({ PATH: process.env.PATH ?? "" }),
   );
+}
+
+/** The fix terminal's shell, resolved on the Mac from the merged terminal profile settings. */
+async function fixShell() {
+  const env = await loginEnv();
   const terminalConfig = vscode.workspace.getConfiguration("terminal.integrated");
   return fixTerminalShell(
     terminalConfig.get("defaultProfile.osx"),
     terminalConfig.get("profiles.osx"),
     env,
     (p) => fs.existsSync(p),
-    loginShell,
+    loginShell(),
   );
 }
 
@@ -222,6 +255,7 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(fixItem);
   const fixGate = new FixGate();
   const fixNotices = new FixNotices();
+  const shadowNotes = new ShadowNotes(context.globalState);
   const recheck = async () => {
     const deps = await buildDispatchDeps(
       trust,
@@ -235,8 +269,9 @@ export function activate(context: vscode.ExtensionContext): void {
     const current = await status(
       await deps.statusDeps({ action: "status", folder: lastFolder ?? "" }, folder),
     );
-    showFixes(fixItem, fixNotices, current);
-    return current;
+    const steps = await planHostFixes(current, lastContainerBunVersion, shadowNotes);
+    showFixes(fixItem, fixNotices, steps);
+    return steps;
   };
 
   context.subscriptions.push(
@@ -254,8 +289,13 @@ export function activate(context: vscode.ExtensionContext): void {
           request?.containerBunVersion,
         );
         const response = await dispatch(request, await make());
-        if (request?.action === "status" && response.ok)
-          showFixes(fixItem, fixNotices, response.result as StatusResult);
+        if (request?.action === "status" && response.ok) {
+          const result = response.result as StatusResult;
+          // Resolving the bun on the host must not hold up the container's status reply.
+          void planHostFixes(result, request.containerBunVersion, shadowNotes)
+            .catch(() => planFixes(result))
+            .then((steps) => showFixes(fixItem, fixNotices, steps));
+        }
         return response;
       },
     ),
@@ -326,7 +366,7 @@ export function activate(context: vscode.ExtensionContext): void {
         void vscode.window.showInformationMessage("Expo Bridge: a fix is already running.");
         return;
       }
-      const steps = planFixes(await recheck());
+      const steps = await recheck();
       if (!steps.length) {
         void vscode.window.showInformationMessage("Expo Bridge: nothing to fix.");
         return;
@@ -336,6 +376,12 @@ export function activate(context: vscode.ExtensionContext): void {
         { title: "Expo Bridge: pick a fix to run", canPickMany: false, ignoreFocusOut: true },
       );
       if (!pick) return;
+      if (!pick.step.commands.length) {
+        void vscode.window.showInformationMessage(
+          `Expo Bridge: ${pick.step.detail ?? pick.step.label}.`,
+        );
+        return;
+      }
       if (pick.step.openUrl) {
         await vscode.env.openExternal(vscode.Uri.parse(pick.step.openUrl));
         const proceed = await vscode.window.showInformationMessage(
