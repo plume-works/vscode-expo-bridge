@@ -217,8 +217,13 @@ A build that exited 0 and produced an artifact is stored under its key, unless `
 cannot list the artifact or it contains a `main.jsbundle` — a build that embeds its
 JavaScript bundle, such as a Release build, is never stored or reused. The artifact and
 `index.json` are written through a temporary file and a rename, so no reader sees a partial
-entry. Every build, reused or not, writes its log, which names the fingerprint hash, the
-key, and the outcome, and never a file's contents.
+entry. The copy and the update of `index.json` hold `index.lock` in the folder's cache
+directory, a file created with `O_CREAT | O_EXCL` that names its process, so builds in one
+folder — from one VS Code window or several, each its own host extension process — never
+drop each other's entries; the build itself never holds it. A lock whose process no longer
+exists, or that is older than 60 s, is taken over. A build that cannot take the lock within
+10 s stores nothing, and its log says so. Every build, reused or not, writes its log, which
+names the fingerprint hash, the key, and the outcome, and never a file's contents.
 
 The fingerprint is a correctness hint, not a security input: project code
 (`app.config.js`, `fingerprint.config.js`) can force a match, and the worst outcome is a
