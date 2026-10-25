@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { StatusResult } from "@plume-works/expo-bridge-protocol";
 import { PROTOCOL_VERSION } from "@plume-works/expo-bridge-protocol";
-import { FixNotices, fixSummary, planFixes } from "../src/fix";
+import { FixNotices, fixSummary, noCommandMessage, planFixes } from "../src/fix";
 
 function statusWith(
   overrides: Partial<Record<keyof StatusResult["checks"], boolean>>,
@@ -56,6 +56,36 @@ describe("planFixes", () => {
     ]);
   });
 
+  test("the bun step runs the host's command for the bun the check ran", () => {
+    const s = statusWith({ bun: false });
+    s.checks.bun.detail = "Mac bun 1.4.3 is older than the container's 1.4.4";
+    const cases: [string | null, string[]][] = [
+      [null, ["brew install oven-sh/bun/bun"]],
+      ["/opt/homebrew/bin/bun", ["brew upgrade bun"]],
+      ["/Users/me/.bun/bin/bun", ["'/Users/me/.bun/bin/bun' upgrade"]],
+    ];
+    for (const [path, commands] of cases) {
+      const [step] = planFixes(s, { path, commands });
+      expect(step?.commands).toEqual(commands);
+      expect(step?.detail).toBe("Mac bun 1.4.3 is older than the container's 1.4.4");
+    }
+  });
+
+  test("a bun of unknown origin is a step with no command and the host's detail", () => {
+    const s = statusWith({ bun: false });
+    s.checks.bun.detail = "Mac bun 1.4.3 is older than the container's 1.4.4";
+    const [step] = planFixes(s, {
+      path: "/Users/me/.local/share/mise/shims/bun",
+      commands: [],
+      detail: "/Users/me/.local/share/mise/shims/bun is not a Homebrew or bun.sh install",
+    });
+    expect(step?.commands).toEqual([]);
+    expect(step?.detail).toBe(
+      "Mac bun 1.4.3 is older than the container's 1.4.4; " +
+        "/Users/me/.local/share/mise/shims/bun is not a Homebrew or bun.sh install",
+    );
+  });
+
   test("checks with no install remedy produce no step", () => {
     const steps = planFixes(
       statusWith({
@@ -68,6 +98,24 @@ describe("planFixes", () => {
       }),
     );
     expect(steps).toEqual([]);
+  });
+});
+
+describe("noCommandMessage", () => {
+  test("a step with no command shows its detail instead of a terminal", () => {
+    const [step] = planFixes(statusWith({ bun: false }), {
+      path: "/Users/me/.local/share/mise/shims/bun",
+      commands: [],
+      detail: "/Users/me/.local/share/mise/shims/bun is not a Homebrew or bun.sh install",
+    });
+    expect(noCommandMessage(step!)).toBe(
+      "Expo Bridge: /Users/me/.local/share/mise/shims/bun is not a Homebrew or bun.sh install.",
+    );
+  });
+
+  test("a step with commands opens a terminal", () => {
+    const [step] = planFixes(statusWith({ bun: false }));
+    expect(noCommandMessage(step!)).toBeNull();
   });
 });
 

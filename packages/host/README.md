@@ -21,3 +21,8 @@ fix missing tools.
 A fix runs in a Mac terminal that opens with the Mac's default terminal profile
 (`terminal.integrated.defaultProfile.osx`), or with your login shell when that profile is not
 found on the Mac.
+
+The bun fix upgrades the first `bun` on your login `PATH`, the one builds run: with
+`brew upgrade bun` when Homebrew installed it, with that binary's own `bun upgrade` when the
+bun.sh installer did, and otherwise not at all — the fix names the path for you to update. When
+that bun comes before a newer one on the `PATH`, a notice says so once.
