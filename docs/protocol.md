@@ -154,6 +154,14 @@ asks for trust and reports the answer rather than failing.
 booted on demand; the detail names the device that would boot), and `port8081Forwarded`
 (`127.0.0.1:8081` on the Mac accepts a connection).
 
+The workspace extension replaces `easProjectId` in every `status` result it relays, to
+`eas-host` or to its own panel, with the container's resolution of the folder's app config:
+the folder's own `node_modules/.bin/expo config --json --type public`, which evaluates
+`app.config.js` or `app.config.ts`, or `app.json` read as JSON when there is no local `expo`
+and no dynamic config. A dynamic config without a local `expo` reports the check as failing
+with a detail saying it could not be resolved. Evaluating the config in the container runs
+only the container's own code; the host still evaluates no project code to answer `status`.
+
 `protocolVersion` carries the host's protocol version, currently `2`.
 
 ### `build`
@@ -357,3 +365,9 @@ acceptance, and `xcodebuild -downloadPlatform iOS`. While a fix runs, the status
 shows it running and offers nothing to click; when its commands finish, or its terminal
 closes, the host re-runs `status` and the item clears or shows what still fails. No protocol
 action can start a fix.
+
+The workspace extension's panel and its Problems quick fixes start a fix only by running
+`expoBridge.fix` with no arguments, which opens the same picker on the Mac; the picker still
+decides what runs. They reach the token and trust only through `expoBridge.setToken` and
+`expoBridge.manageTrust`, also without arguments, and a build from the panel sends the same
+`build` request as `eas-host build`, behind the same trust and confirmation.
