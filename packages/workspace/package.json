@@ -27,6 +27,7 @@
     "package": "bun run build && vsce package --no-dependencies $VSCE_PACKAGE_FLAGS --out vscode-expo-bridge-workspace.vsix"
   },
   "dependencies": {
-    "@plume-works/expo-bridge-protocol": "workspace:*"
+    "@plume-works/expo-bridge-protocol": "workspace:*",
+    "jsonc-parser": "3.3.1"
   }
 }

@@ -1,26 +1,8 @@
 import * as path from "node:path";
+import { normalizeRange } from "@plume-works/expo-bridge-protocol";
 import { readJsonFile } from "./jsonfile";
 
-const COMPARATOR_RE =
-  /^(?:[<>]=?|=|~|\^)?(?:\d+|[xX*])(?:\.(?:\d+|[xX*])){0,2}(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
-
-/**
- * A semver version or range with the spaces after its operators removed, so it reads as
- * one `bunx` spec; null for `file:`, git, URL, alias, and dist-tag specs.
- */
-export function normalizeRange(spec: string): string | null {
-  if (!spec.trim()) return null;
-  const sets = spec.split("||").map((set) => {
-    const tokens = set
-      .trim()
-      .replace(/([<>]=?|=|~|\^)\s+/g, "$1")
-      .split(/\s+/);
-    const comparators =
-      tokens.length === 3 && tokens[1] === "-" ? [tokens[0]!, tokens[2]!] : tokens;
-    return comparators.every((t) => COMPARATOR_RE.test(t)) ? tokens.join(" ") : null;
-  });
-  return sets.every((set) => set !== null) ? sets.join(" || ") : null;
-}
+export { normalizeRange };
 
 export class EasCliError extends Error {}
 
