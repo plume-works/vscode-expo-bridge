@@ -4,18 +4,13 @@ import * as net from "node:net";
 import * as os from "node:os";
 import * as path from "node:path";
 import * as vscode from "vscode";
-import {
-  SOCKET_DIR,
-  WRITE_DIR_REL,
-  type Request,
-  type Response,
-} from "@plume-works/expo-bridge-protocol";
+import { SOCKET_DIR, type Response } from "@plume-works/expo-bridge-protocol";
 import { resolveRequest } from "./artifacts";
 import type { CliRequest } from "./cli-args";
 import { ensureRegistryDir, pruneStale, removeOwn, socketPath, writeEntry } from "./registry";
+import { runRequest } from "./requests";
 import { encodeFrame, LineDecoder } from "./wire";
 
-const DISPATCH_COMMAND = "expoBridge.ui.dispatch";
 const EAS_HOST_SCRIPT = "eas-host.js";
 
 /** Install the `eas-host` launcher into ~/.local/bin, pointing at the bundled CLI. */
@@ -27,48 +22,6 @@ function installEasHost(extensionPath: string): void {
   fs.writeFileSync(launcher, `#!/usr/bin/env bash\nexec node ${JSON.stringify(target)} "$@"\n`, {
     mode: 0o755,
   });
-}
-
-/** Tail a log file, invoking `onLine` for each new line until `stop()` is called. */
-function tailLog(logPath: string, onLine: (line: string) => void): () => void {
-  let offset = 0;
-  const decoder = new LineDecoder<never>();
-  let closed = false;
-  const read = () => {
-    if (closed || !fs.existsSync(logPath)) return;
-    const fd = fs.openSync(logPath, "r");
-    try {
-      const stat = fs.fstatSync(fd);
-      if (stat.size > offset) {
-        const buf = Buffer.alloc(stat.size - offset);
-        fs.readSync(fd, buf, 0, buf.length, offset);
-        offset = stat.size;
-        const text = buf.toString("utf8");
-        for (const line of text.split("\n").slice(0, -1)) onLine(line);
-        void decoder;
-      }
-    } finally {
-      fs.closeSync(fd);
-    }
-  };
-  const timer = setInterval(read, 250);
-  return () => {
-    closed = true;
-    clearInterval(timer);
-    read();
-  };
-}
-
-function newestBuildLog(folder: string, since: number): string | null {
-  const dir = path.join(folder, WRITE_DIR_REL);
-  if (!fs.existsSync(dir)) return null;
-  const logs = fs
-    .readdirSync(dir)
-    .filter((f) => f.startsWith("build-") && f.endsWith(".log"))
-    .map((f) => ({ f, m: fs.statSync(path.join(dir, f)).mtimeMs }))
-    .filter((x) => x.m >= since)
-    .sort((a, b) => b.m - a.m);
-  return logs.length ? path.join(dir, logs[0]!.f) : null;
 }
 
 /** The container paths of this window's workspace folders, as VS Code names them. */
@@ -85,33 +38,12 @@ async function handleRequest(
     emit({ kind: "response", response: { ok: false, error: resolved.error } });
     return;
   }
-  const request: Request = resolved.request;
-  let stopTail: (() => void) | undefined;
-  if (request.action === "build") {
-    const since = Date.now();
-    const poll = setInterval(() => {
-      const log = newestBuildLog(request.folder, since);
-      if (log) {
-        clearInterval(poll);
-        stopTail = tailLog(log, (line) => emit({ kind: "log", line }));
-      }
-    }, 250);
-    stopTail = () => clearInterval(poll);
-  }
-  try {
-    const response = (await vscode.commands.executeCommand(DISPATCH_COMMAND, request)) as Response;
-    emit({ kind: "response", response });
-  } catch (e) {
-    emit({
-      kind: "response",
-      response: {
-        ok: false,
-        error: { code: "action-failed", message: String((e as Error)?.message ?? e) },
-      },
-    });
-  } finally {
-    stopTail?.();
-  }
+  const execute = (command: string, arg: unknown) =>
+    Promise.resolve(vscode.commands.executeCommand(command, arg));
+  const { response } = await runRequest(resolved.request, execute, (line) =>
+    emit({ kind: "log", line }),
+  );
+  emit({ kind: "response", response });
 }
 
 export function activate(context: vscode.ExtensionContext): void {
