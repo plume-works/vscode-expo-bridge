@@ -9,6 +9,7 @@ import { buildProfiles, easJsonChecks, readEasJson } from "./easjson";
 import { Panel, PANEL_VIEW } from "./panel";
 import type { FolderView } from "./panelmodel";
 import type { RequestOutcome } from "./requests";
+import { statusBarState } from "./statusbar";
 import type { StatusStore } from "./statusstore";
 
 export interface UiDeps {
@@ -125,10 +126,25 @@ export function activateUi(context: vscode.ExtensionContext, deps: UiDeps): Ui {
   tree.onDidChangeVisibility(firstLook);
   setTimeout(firstLook, 0);
 
-  const refresh = () => panel.refresh();
+  const item = vscode.window.createStatusBarItem(
+    "expoBridge.status",
+    vscode.StatusBarAlignment.Left,
+  );
+  item.name = "Expo Bridge";
+  item.command = "workbench.view.extension.expoBridge";
+
+  const refresh = () => {
+    panel.refresh();
+    const state = statusBarState(views());
+    if (!state) return item.hide();
+    item.text = state.text;
+    item.tooltip = state.tooltip;
+    item.show();
+  };
   context.subscriptions.push(
     panel,
     tree,
+    item,
     output,
     vscode.commands.registerCommand("expoBridge.panel.refresh", () => requestStatus(deps)),
     vscode.commands.registerCommand("expoBridge.panel.build", () => build(false)),
