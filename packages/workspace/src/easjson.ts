@@ -1,6 +1,12 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { findNodeAtLocation, getNodeValue, parseTree, type Node } from "jsonc-parser";
+// The UMD build loads its modules at runtime, which the bundled extension cannot resolve.
+import {
+  findNodeAtLocation,
+  getNodeValue,
+  parseTree,
+  type Node,
+} from "jsonc-parser/lib/esm/main.js";
 
 /** A span of a file, in characters from its start. */
 export interface TextRange {

@@ -18,6 +18,7 @@ import {
 } from "./registry";
 import { relayRequest, type RelayDeps } from "./requests";
 import { StatusStore } from "./statusstore";
+import { activateUi } from "./ui";
 import { encodeFrame, LineDecoder } from "./wire";
 
 const EAS_HOST_SCRIPT = "eas-host.js";
@@ -47,6 +48,9 @@ function workspaceFolders(): string[] {
   return (vscode.workspace.workspaceFolders ?? []).map((f) => f.uri.fsPath);
 }
 
+const execute = (command: string, arg: unknown) =>
+  Promise.resolve(vscode.commands.executeCommand(command, arg));
+
 async function handleRequest(
   cliRequest: CliRequest,
   emit: (frame: { kind: "log"; line: string } | { kind: "response"; response: Response }) => void,
@@ -56,8 +60,6 @@ async function handleRequest(
     emit({ kind: "response", response: { ok: false, error: resolved.error } });
     return;
   }
-  const execute = (command: string, arg: unknown) =>
-    Promise.resolve(vscode.commands.executeCommand(command, arg));
   const { response } = await relayRequest(
     resolved.request,
     execute,
@@ -113,9 +115,17 @@ export function activate(context: vscode.ExtensionContext): void {
     warn(e);
   }
 
+  const ui = activateUi(context, {
+    store,
+    relay: (request, onLog = () => {}) => relayRequest(request, execute, onLog, relayDeps),
+    workspaceFolders,
+  });
+
   const configWatcher = vscode.workspace.createFileSystemWatcher(PROJECT_ID_INPUTS_GLOB);
-  const forget = (uri: vscode.Uri) =>
+  const forget = (uri: vscode.Uri) => {
     projectIds.clear(containingFolder(workspaceFolders(), uri.fsPath) ?? undefined);
+    ui.refresh();
+  };
   configWatcher.onDidChange(forget);
   configWatcher.onDidCreate(forget);
   configWatcher.onDidDelete(forget);

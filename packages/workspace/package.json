@@ -22,6 +22,62 @@
   "activationEvents": [
     "workspaceContains:eas.json"
   ],
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "expoBridge",
+          "title": "Expo Bridge",
+          "icon": "media/expo-bridge.svg"
+        }
+      ]
+    },
+    "views": {
+      "expoBridge": [
+        {
+          "id": "expoBridge.panel",
+          "name": "Status"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "expoBridge.panel",
+        "when": "expoBridge.panelState == no-project",
+        "contents": "No workspace folder of this window has an eas.json, so there is no Expo project for the bridge to build."
+      },
+      {
+        "view": "expoBridge.panel",
+        "when": "expoBridge.panelState == not-checked",
+        "contents": "The bridge has not been checked in this window yet."
+      },
+      {
+        "view": "expoBridge.panel",
+        "when": "expoBridge.panelState == failed",
+        "contents": "The last status request failed. The panel shows the reason once a status succeeds."
+      },
+      {
+        "view": "expoBridge.panel",
+        "when": "expoBridge.panelState == host-missing",
+        "contents": "The Mac half of the Expo Bridge is not installed on this window's machine. Install it locally once per Mac, then reload the window.\n[Show the Mac half](command:workbench.extensions.search?%5B%22%40id%3Aplume-works.vscode-expo-bridge-host%22%5D)"
+      },
+      {
+        "view": "expoBridge.panel",
+        "when": "expoBridge.panelState == unavailable-macHost",
+        "contents": "The bridge is unavailable: this window's machine is not a Mac. EAS cloud builds still work."
+      },
+      {
+        "view": "expoBridge.panel",
+        "when": "expoBridge.panelState == unavailable-hostPathExists",
+        "contents": "The bridge is unavailable: the workspace does not exist at its host path on this Mac. EAS cloud builds still work."
+      },
+      {
+        "view": "expoBridge.panel",
+        "when": "expoBridge.panelState == unavailable-workspaceMapped",
+        "contents": "The bridge is unavailable: the folder does not map to a path on this Mac. EAS cloud builds still work."
+      }
+    ]
+  },
   "scripts": {
     "build": "bun build src/extension.ts --outdir dist --target node --format cjs --external vscode && bun build bin/eas-host.ts --outdir dist --target node --format cjs",
     "package": "bun run build && vsce package --no-dependencies $VSCE_PACKAGE_FLAGS --out vscode-expo-bridge-workspace.vsix"
