@@ -5,6 +5,7 @@ import * as vscode from "vscode";
 import type { Request } from "@plume-works/expo-bridge-protocol";
 import { containerBunVersion } from "./cli-args";
 import { buildMessage, HOST_COMMANDS, profileKey } from "./actions";
+import { diagnosticsFor, readFolderFiles, type BridgeDiagnostic } from "./diagnostics";
 import { buildProfiles, easJsonChecks, readEasJson } from "./easjson";
 import { Panel, PANEL_VIEW } from "./panel";
 import type { FolderView } from "./panelmodel";
@@ -48,6 +49,35 @@ async function pickFolder(deps: UiDeps): Promise<string | undefined> {
     { title: "Expo Bridge: pick the Expo folder" },
   );
   return pick?.folder;
+}
+
+const SEVERITIES: Record<BridgeDiagnostic["severity"], vscode.DiagnosticSeverity> = {
+  error: vscode.DiagnosticSeverity.Error,
+  warning: vscode.DiagnosticSeverity.Warning,
+  info: vscode.DiagnosticSeverity.Information,
+};
+
+/** The source every bridge diagnostic carries, which the quick fixes match on. */
+export const DIAGNOSTIC_SOURCE = "Expo Bridge";
+
+/** Replace every bridge diagnostic with the current folders' failing checks. */
+function publishDiagnostics(collection: vscode.DiagnosticCollection, views: FolderView[]): void {
+  collection.clear();
+  const byFile = new Map<string, vscode.Diagnostic[]>();
+  for (const view of views) {
+    for (const d of diagnosticsFor(view, readFolderFiles(view.folder))) {
+      const diagnostic = new vscode.Diagnostic(
+        new vscode.Range(d.start.line, d.start.character, d.end.line, d.end.character),
+        d.message,
+        SEVERITIES[d.severity],
+      );
+      diagnostic.source = DIAGNOSTIC_SOURCE;
+      diagnostic.code = d.code;
+      const file = path.join(view.folder, d.file);
+      byFile.set(file, [...(byFile.get(file) ?? []), diagnostic]);
+    }
+  }
+  for (const [file, diagnostics] of byFile) collection.set(vscode.Uri.file(file), diagnostics);
 }
 
 export function activateUi(context: vscode.ExtensionContext, deps: UiDeps): Ui {
@@ -133,9 +163,13 @@ export function activateUi(context: vscode.ExtensionContext, deps: UiDeps): Ui {
   item.name = "Expo Bridge";
   item.command = "workbench.view.extension.expoBridge";
 
+  const diagnostics = vscode.languages.createDiagnosticCollection("expoBridge");
+
   const refresh = () => {
     panel.refresh();
-    const state = statusBarState(views());
+    const current = views();
+    publishDiagnostics(diagnostics, current);
+    const state = statusBarState(current);
     if (!state) return item.hide();
     item.text = state.text;
     item.tooltip = state.tooltip;
@@ -145,6 +179,7 @@ export function activateUi(context: vscode.ExtensionContext, deps: UiDeps): Ui {
     panel,
     tree,
     item,
+    diagnostics,
     output,
     vscode.commands.registerCommand("expoBridge.panel.refresh", () => requestStatus(deps)),
     vscode.commands.registerCommand("expoBridge.panel.build", () => build(false)),
