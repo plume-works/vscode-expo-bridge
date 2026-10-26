@@ -5,6 +5,7 @@ import * as vscode from "vscode";
 import type { Request } from "@plume-works/expo-bridge-protocol";
 import { containerBunVersion } from "./cli-args";
 import { buildMessage, HOST_COMMANDS, profileKey } from "./actions";
+import { DIAGNOSTIC_SOURCE, registerQuickFixes } from "./codeactions";
 import { diagnosticsFor, readFolderFiles, type BridgeDiagnostic } from "./diagnostics";
 import { buildProfiles, easJsonChecks, readEasJson } from "./easjson";
 import { Panel, PANEL_VIEW } from "./panel";
@@ -56,9 +57,6 @@ const SEVERITIES: Record<BridgeDiagnostic["severity"], vscode.DiagnosticSeverity
   warning: vscode.DiagnosticSeverity.Warning,
   info: vscode.DiagnosticSeverity.Information,
 };
-
-/** The source every bridge diagnostic carries, which the quick fixes match on. */
-export const DIAGNOSTIC_SOURCE = "Expo Bridge";
 
 /** Replace every bridge diagnostic with the current folders' failing checks. */
 function publishDiagnostics(collection: vscode.DiagnosticCollection, views: FolderView[]): void {
@@ -180,6 +178,7 @@ export function activateUi(context: vscode.ExtensionContext, deps: UiDeps): Ui {
     tree,
     item,
     diagnostics,
+    ...registerQuickFixes(deps.workspaceFolders),
     output,
     vscode.commands.registerCommand("expoBridge.panel.refresh", () => requestStatus(deps)),
     vscode.commands.registerCommand("expoBridge.panel.build", () => build(false)),
