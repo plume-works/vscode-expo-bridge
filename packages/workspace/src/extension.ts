@@ -5,7 +5,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import * as vscode from "vscode";
 import { SOCKET_DIR, type Response } from "@plume-works/expo-bridge-protocol";
-import { PROJECT_ID_INPUTS_GLOB, ProjectIdCache } from "./appconfig";
+import { PROJECT_ID_INPUTS_GLOB, ProjectIdCache, realRunner, resolveProjectId } from "./appconfig";
 import { resolveRequest } from "./artifacts";
 import type { CliRequest } from "./cli-args";
 import {
@@ -16,12 +16,20 @@ import {
   socketPath,
   writeEntry,
 } from "./registry";
-import { runRequest } from "./requests";
+import { relayRequest, type RelayDeps } from "./requests";
+import { StatusStore } from "./statusstore";
 import { encodeFrame, LineDecoder } from "./wire";
 
 const EAS_HOST_SCRIPT = "eas-host.js";
 
 const projectIds = new ProjectIdCache();
+const store = new StatusStore();
+
+const relayDeps: RelayDeps = {
+  projectId: (folder) =>
+    projectIds.get(folder, () => resolveProjectId(folder, realRunner, fs.existsSync)),
+  onOutcome: (request, outcome) => store.record(request, outcome),
+};
 
 /** Install the `eas-host` launcher into ~/.local/bin, pointing at the bundled CLI. */
 function installEasHost(extensionPath: string): void {
@@ -50,8 +58,11 @@ async function handleRequest(
   }
   const execute = (command: string, arg: unknown) =>
     Promise.resolve(vscode.commands.executeCommand(command, arg));
-  const { response } = await runRequest(resolved.request, execute, (line) =>
-    emit({ kind: "log", line }),
+  const { response } = await relayRequest(
+    resolved.request,
+    execute,
+    (line) => emit({ kind: "log", line }),
+    relayDeps,
   );
   emit({ kind: "response", response });
 }
@@ -69,6 +80,7 @@ export function activate(context: vscode.ExtensionContext): void {
   const warn = (e: unknown) =>
     void vscode.window.showWarningMessage(`Expo Bridge socket: ${String(e)}`);
   const register = () => {
+    store.retain(workspaceFolders());
     try {
       writeEntry(SOCKET_DIR, id, {
         pid: process.pid,

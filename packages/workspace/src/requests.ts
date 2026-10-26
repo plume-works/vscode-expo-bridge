@@ -1,6 +1,13 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { WRITE_DIR_REL, type Request, type Response } from "@plume-works/expo-bridge-protocol";
+import {
+  WRITE_DIR_REL,
+  type Request,
+  type Response,
+  type StatusCheck,
+  type StatusResult,
+} from "@plume-works/expo-bridge-protocol";
+import type { ProjectId } from "./appconfig";
 
 /** The ui-side command the host extension registers to receive a protocol request. */
 export const DISPATCH_COMMAND = "expoBridge.ui.dispatch";
@@ -94,4 +101,45 @@ export async function runRequest(
   } finally {
     stopTail?.();
   }
+}
+
+/** The `easProjectId` check for a project ID the container resolved. */
+export function projectIdCheck(id: ProjectId): StatusCheck {
+  if (id.state === "set") return { ok: true };
+  if (id.state === "not-set")
+    return { ok: false, detail: "extra.eas.projectId not set in the app config" };
+  return { ok: false, detail: id.reason };
+}
+
+export interface RelayDeps {
+  /** The container's resolution of the request folder's project ID. */
+  projectId: (folder: string) => Promise<ProjectId>;
+  /** Sees every outcome, after the container's checks replaced the host's. */
+  onOutcome?: (request: Request, outcome: RequestOutcome) => void;
+}
+
+/**
+ * `runRequest`, with every successful `status` result's `easProjectId` replaced by the
+ * container's resolution of the app config, so `eas-host` and the workspace UI agree.
+ */
+export async function relayRequest(
+  request: Request,
+  execute: Execute,
+  onLog: (line: string) => void,
+  deps: RelayDeps,
+): Promise<RequestOutcome> {
+  let outcome = await runRequest(request, execute, onLog);
+  const { response } = outcome;
+  if (request.action === "status" && response.ok) {
+    const result = response.result as StatusResult;
+    if (result?.checks) {
+      const easProjectId = projectIdCheck(await deps.projectId(request.folder));
+      outcome = {
+        ...outcome,
+        response: { ok: true, result: { ...result, checks: { ...result.checks, easProjectId } } },
+      };
+    }
+  }
+  deps.onOutcome?.(request, outcome);
+  return outcome;
 }

@@ -2,8 +2,15 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { WRITE_DIR_REL, type Request } from "@plume-works/expo-bridge-protocol";
-import { DISPATCH_COMMAND, isCommandNotFound, runRequest } from "../src/requests";
+import { WRITE_DIR_REL, type Request, type StatusResult } from "@plume-works/expo-bridge-protocol";
+import {
+  DISPATCH_COMMAND,
+  isCommandNotFound,
+  projectIdCheck,
+  relayRequest,
+  runRequest,
+  type RequestOutcome,
+} from "../src/requests";
 
 let folder: string;
 
@@ -80,5 +87,74 @@ describe("isCommandNotFound", () => {
     expect(isCommandNotFound(new Error("command 'a.b' not found"), "a.b")).toBe(true);
     expect(isCommandNotFound(new Error("command 'a.c' not found"), "a.b")).toBe(false);
     expect(isCommandNotFound("boom", "a.b")).toBe(false);
+  });
+});
+
+const hostStatus = {
+  protocolVersion: 2,
+  available: true,
+  folderHostPath: "/Users/me/app",
+  checks: {
+    easProjectId: { ok: false, detail: "extra.eas.projectId not set in app.json" },
+    node: { ok: true },
+  },
+} as unknown as StatusResult;
+
+describe("relayRequest", () => {
+  test("replaces the host's easProjectId with the container's resolution", async () => {
+    const seen: RequestOutcome[] = [];
+    const outcome = await relayRequest(
+      { action: "status", folder },
+      async () => ({ ok: true, result: hostStatus }),
+      () => {},
+      {
+        projectId: async (f) =>
+          f === folder ? { state: "set", projectId: "id" } : { state: "not-set" },
+        onOutcome: (_req, o) => seen.push(o),
+      },
+    );
+    const result = (outcome.response as { result: StatusResult }).result;
+    expect(result.checks.easProjectId).toEqual({ ok: true });
+    expect(result.checks.node).toEqual({ ok: true });
+    expect(hostStatus.checks.easProjectId.ok).toBe(false);
+    expect(seen).toEqual([outcome]);
+  });
+
+  test("leaves failed and non-status responses alone, and still reports them", async () => {
+    const seen: string[] = [];
+    let resolved = 0;
+    const deps = {
+      projectId: async () => (resolved++, { state: "set" as const, projectId: "id" }),
+      onOutcome: (req: Request) => seen.push(req.action),
+    };
+    const failed = await relayRequest(
+      { action: "status", folder },
+      async () => ({ ok: false, error: { code: "unavailable", message: "no" } }),
+      () => {},
+      deps,
+    );
+    expect(failed.response.ok).toBe(false);
+    await relayRequest(
+      { action: "launch", folder },
+      async () => ({ ok: true, result: { bundleIdentifier: "x" } }),
+      () => {},
+      deps,
+    );
+    expect(resolved).toBe(0);
+    expect(seen).toEqual(["status", "launch"]);
+  });
+});
+
+describe("projectIdCheck", () => {
+  test("maps each resolution to a check", () => {
+    expect(projectIdCheck({ state: "set", projectId: "x" })).toEqual({ ok: true });
+    expect(projectIdCheck({ state: "not-set" })).toEqual({
+      ok: false,
+      detail: "extra.eas.projectId not set in the app config",
+    });
+    expect(projectIdCheck({ state: "unresolved", reason: "why" })).toEqual({
+      ok: false,
+      detail: "why",
+    });
   });
 });
