@@ -5,13 +5,23 @@ import * as os from "node:os";
 import * as path from "node:path";
 import * as vscode from "vscode";
 import { SOCKET_DIR, type Response } from "@plume-works/expo-bridge-protocol";
+import { PROJECT_ID_INPUTS_GLOB, ProjectIdCache } from "./appconfig";
 import { resolveRequest } from "./artifacts";
 import type { CliRequest } from "./cli-args";
-import { ensureRegistryDir, pruneStale, removeOwn, socketPath, writeEntry } from "./registry";
+import {
+  containingFolder,
+  ensureRegistryDir,
+  pruneStale,
+  removeOwn,
+  socketPath,
+  writeEntry,
+} from "./registry";
 import { runRequest } from "./requests";
 import { encodeFrame, LineDecoder } from "./wire";
 
 const EAS_HOST_SCRIPT = "eas-host.js";
+
+const projectIds = new ProjectIdCache();
 
 /** Install the `eas-host` launcher into ~/.local/bin, pointing at the bundled CLI. */
 function installEasHost(extensionPath: string): void {
@@ -91,16 +101,27 @@ export function activate(context: vscode.ExtensionContext): void {
     warn(e);
   }
 
-  context.subscriptions.push(vscode.workspace.onDidChangeWorkspaceFolders(register), {
-    dispose: () => {
-      server.close();
-      try {
-        removeOwn(SOCKET_DIR, id);
-      } catch {
-        // best-effort cleanup on deactivate; a later activation prunes the dead entry
-      }
+  const configWatcher = vscode.workspace.createFileSystemWatcher(PROJECT_ID_INPUTS_GLOB);
+  const forget = (uri: vscode.Uri) =>
+    projectIds.clear(containingFolder(workspaceFolders(), uri.fsPath) ?? undefined);
+  configWatcher.onDidChange(forget);
+  configWatcher.onDidCreate(forget);
+  configWatcher.onDidDelete(forget);
+
+  context.subscriptions.push(
+    configWatcher,
+    vscode.workspace.onDidChangeWorkspaceFolders(register),
+    {
+      dispose: () => {
+        server.close();
+        try {
+          removeOwn(SOCKET_DIR, id);
+        } catch {
+          // best-effort cleanup on deactivate; a later activation prunes the dead entry
+        }
+      },
     },
-  });
+  );
 }
 
 export function deactivate(): void {}
