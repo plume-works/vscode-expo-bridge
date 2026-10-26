@@ -15,14 +15,14 @@
     },
     "packages/host": {
       "name": "vscode-expo-bridge-host",
-      "version": "0.3.0",
+      "version": "0.4.0",
       "dependencies": {
         "@plume-works/expo-bridge-protocol": "workspace:*",
       },
     },
     "packages/pack": {
       "name": "vscode-expo-bridge",
-      "version": "0.3.0",
+      "version": "0.4.0",
     },
     "packages/protocol": {
       "name": "@plume-works/expo-bridge-protocol",
@@ -34,7 +34,7 @@
     },
     "packages/workspace": {
       "name": "vscode-expo-bridge-workspace",
-      "version": "0.3.0",
+      "version": "0.4.0",
       "dependencies": {
         "@plume-works/expo-bridge-protocol": "workspace:*",
         "jsonc-parser": "3.3.1",
