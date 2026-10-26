@@ -76,7 +76,104 @@
         "when": "expoBridge.panelState == unavailable-workspaceMapped",
         "contents": "The bridge is unavailable: the folder does not map to a path on this Mac. EAS cloud builds still work."
       }
-    ]
+    ],
+    "commands": [
+      {
+        "command": "expoBridge.panel.refresh",
+        "title": "Re-run Status",
+        "category": "Expo Bridge",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "expoBridge.panel.build",
+        "title": "Build",
+        "category": "Expo Bridge",
+        "icon": "$(play)"
+      },
+      {
+        "command": "expoBridge.panel.cleanBuild",
+        "title": "Clean Build",
+        "category": "Expo Bridge"
+      },
+      {
+        "command": "expoBridge.panel.changeProfile",
+        "title": "Change Build Profile",
+        "category": "Expo Bridge"
+      },
+      {
+        "command": "expoBridge.panel.fix",
+        "title": "Fix…",
+        "category": "Expo Bridge",
+        "icon": "$(wrench)"
+      },
+      {
+        "command": "expoBridge.panel.setToken",
+        "title": "Set EXPO_TOKEN",
+        "category": "Expo Bridge",
+        "icon": "$(key)"
+      },
+      {
+        "command": "expoBridge.panel.manageTrust",
+        "title": "Manage Trust",
+        "category": "Expo Bridge",
+        "icon": "$(shield)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "expoBridge.panel.refresh",
+          "when": "view == expoBridge.panel",
+          "group": "navigation@1"
+        },
+        {
+          "command": "expoBridge.panel.build",
+          "when": "view == expoBridge.panel",
+          "group": "navigation@2"
+        },
+        {
+          "command": "expoBridge.panel.cleanBuild",
+          "when": "view == expoBridge.panel",
+          "group": "build@1"
+        },
+        {
+          "command": "expoBridge.panel.changeProfile",
+          "when": "view == expoBridge.panel",
+          "group": "build@2"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "expoBridge.panel.fix",
+          "when": "view == expoBridge.panel && viewItem == expoBridge.check.fixable",
+          "group": "inline"
+        },
+        {
+          "command": "expoBridge.panel.setToken",
+          "when": "view == expoBridge.panel && viewItem == expoBridge.check.expoToken",
+          "group": "inline"
+        },
+        {
+          "command": "expoBridge.panel.manageTrust",
+          "when": "view == expoBridge.panel && viewItem == expoBridge.check.workspaceTrusted",
+          "group": "inline"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "expoBridge.panel.fix",
+          "when": "false"
+        },
+        {
+          "command": "expoBridge.panel.setToken",
+          "when": "false"
+        },
+        {
+          "command": "expoBridge.panel.manageTrust",
+          "when": "false"
+        }
+      ]
+    }
   },
   "scripts": {
     "build": "bun build src/extension.ts --outdir dist --target node --format cjs --external vscode && bun build bin/eas-host.ts --outdir dist --target node --format cjs",
