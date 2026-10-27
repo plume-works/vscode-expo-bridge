@@ -2,8 +2,9 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { WRITE_DIR_REL, type Request, type StatusResult } from "@plume-works/expo-bridge-protocol";
+import type { Request, StatusResult } from "@plume-works/expo-bridge-protocol";
 import {
+  BuildLogs,
   DISPATCH_COMMAND,
   isCommandNotFound,
   projectIdCheck,
@@ -21,8 +22,6 @@ beforeEach(() => {
 afterEach(() => {
   fs.rmSync(folder, { recursive: true, force: true });
 });
-
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 describe("runRequest", () => {
   test("dispatches the request through the host command and returns its response", async () => {
@@ -61,24 +60,48 @@ describe("runRequest", () => {
     });
   });
 
-  test("streams the build log written while a build runs", async () => {
+  test("passes the host's build log chunks to onLog as lines until the response", async () => {
+    const logs = new BuildLogs();
     const lines: string[] = [];
     const outcome = await runRequest(
       { action: "build", profile: "development", folder },
       async () => {
-        const dir = path.join(folder, WRITE_DIR_REL);
-        fs.mkdirSync(dir, { recursive: true });
-        await sleep(50);
-        fs.writeFileSync(path.join(dir, "build-1.log"), "one\ntwo\n");
-        await sleep(700);
-        fs.appendFileSync(path.join(dir, "build-1.log"), "three\n");
-        await sleep(400);
+        logs.receive({ folder, chunk: "one\ntw" });
+        logs.receive({ folder: "/workspaces/other", chunk: "elsewhere\n" });
+        logs.receive({ folder, chunk: "o\nthree" });
         return { ok: true, result: { artifactRel: "a.tar.gz", logRel: "b.log", exitCode: 0 } };
       },
       (line) => lines.push(line),
+      logs,
     );
+    logs.receive({ folder, chunk: "late\n" });
     expect(outcome.response.ok).toBe(true);
     expect(lines).toEqual(["one", "two", "three"]);
+  });
+});
+
+describe("BuildLogs", () => {
+  test("ignores calls that are not a folder and a chunk", () => {
+    const logs = new BuildLogs();
+    const lines: string[] = [];
+    const stop = logs.open(folder, (line) => lines.push(line));
+    for (const arg of [undefined, null, "x", { folder }, { folder, chunk: 1 }]) logs.receive(arg);
+    stop();
+    expect(lines).toEqual([]);
+  });
+
+  test("gives every open build of a folder its own line split", () => {
+    const logs = new BuildLogs();
+    const a: string[] = [];
+    const b: string[] = [];
+    const stopA = logs.open(folder, (line) => a.push(line));
+    logs.receive({ folder, chunk: "x\ny" });
+    const stopB = logs.open(folder, (line) => b.push(line));
+    logs.receive({ folder, chunk: "z\n" });
+    stopA();
+    stopB();
+    expect(a).toEqual(["x", "yz"]);
+    expect(b).toEqual(["z"]);
   });
 });
 

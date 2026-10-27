@@ -16,7 +16,13 @@ import { fixTerminalShell } from "./shell";
 import type { InstalledApp } from "./install";
 import { portAcceptsConnections } from "./port";
 import { status } from "./status";
-import type { Request, StatusResult } from "@plume-works/expo-bridge-protocol";
+import { LogForwarder } from "./buildlog";
+import {
+  BUILD_LOG_COMMAND,
+  type BuildLogChunk,
+  type Request,
+  type StatusResult,
+} from "@plume-works/expo-bridge-protocol";
 
 /** The ui-side command the workspace extension invokes with a protocol request. */
 const DISPATCH_COMMAND = "expoBridge.ui.dispatch";
@@ -167,6 +173,7 @@ function buildDispatchDeps(
   globalStorage: string,
   hostVersion: string,
   containerBunVersion: string | undefined,
+  onBuildLog?: (chunk: string) => void,
 ): () => Promise<DispatchDeps> {
   return async () => {
     const host = resolveHost();
@@ -229,6 +236,7 @@ function buildDispatchDeps(
           fileExists,
           confirmed: true,
           now: Date.now,
+          onLog: onBuildLog,
         };
       },
       simContext,
@@ -282,13 +290,28 @@ export function activate(context: vscode.ExtensionContext): void {
           lastContainerBunVersion = request.containerBunVersion;
           lastFolder = typeof request.folder === "string" ? request.folder : undefined;
         }
+        const folder = request?.folder;
+        const logs =
+          request?.action === "build" && typeof folder === "string"
+            ? new LogForwarder((chunk) =>
+                Promise.resolve(
+                  vscode.commands.executeCommand(BUILD_LOG_COMMAND, {
+                    folder,
+                    chunk,
+                  } satisfies BuildLogChunk),
+                ),
+              )
+            : undefined;
         const make = buildDispatchDeps(
           trust,
           globalStorage,
           hostVersion,
           request?.containerBunVersion,
+          logs && ((chunk) => logs.push(chunk)),
         );
         const response = await dispatch(request, await make());
+        // Every chunk reaches the workspace before the response, which ends its stream.
+        await logs?.drain();
         if (request?.action === "status" && response.ok) {
           const result = response.result as StatusResult;
           // Resolving the bun on the host must not hold up the container's status reply.

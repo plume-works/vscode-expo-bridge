@@ -4,7 +4,7 @@ import * as net from "node:net";
 import * as os from "node:os";
 import * as path from "node:path";
 import * as vscode from "vscode";
-import { SOCKET_DIR, type Response } from "@plume-works/expo-bridge-protocol";
+import { BUILD_LOG_COMMAND, SOCKET_DIR, type Response } from "@plume-works/expo-bridge-protocol";
 import { PROJECT_ID_INPUTS_GLOB, ProjectIdCache, realRunner, resolveProjectId } from "./appconfig";
 import { resolveRequest } from "./artifacts";
 import type { CliRequest } from "./cli-args";
@@ -16,7 +16,7 @@ import {
   socketPath,
   writeEntry,
 } from "./registry";
-import { relayRequest, type RelayDeps } from "./requests";
+import { BuildLogs, relayRequest, type RelayDeps } from "./requests";
 import { StatusStore } from "./statusstore";
 import { activateUi } from "./ui";
 import { encodeFrame, LineDecoder } from "./wire";
@@ -25,11 +25,13 @@ const EAS_HOST_SCRIPT = "eas-host.js";
 
 const projectIds = new ProjectIdCache();
 const store = new StatusStore();
+const buildLogs = new BuildLogs();
 
 const relayDeps: RelayDeps = {
   projectId: (folder) =>
     projectIds.get(folder, () => resolveProjectId(folder, realRunner, fs.existsSync)),
   onOutcome: (request, outcome) => store.record(request, outcome),
+  buildLogs,
 };
 
 /** Install the `eas-host` launcher into ~/.local/bin, pointing at the bundled CLI. */
@@ -131,6 +133,7 @@ export function activate(context: vscode.ExtensionContext): void {
   configWatcher.onDidDelete(forget);
 
   context.subscriptions.push(
+    vscode.commands.registerCommand(BUILD_LOG_COMMAND, (arg: unknown) => buildLogs.receive(arg)),
     configWatcher,
     vscode.workspace.onDidChangeWorkspaceFolders(register),
     {

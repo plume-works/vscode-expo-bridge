@@ -34,6 +34,15 @@ export function parseRegistryEntry(value: unknown): RegistryEntry | null {
 /** Every write the host extension makes under the workspace lands here, and nowhere else. */
 export const WRITE_DIR_REL = ".tmp/expo-bridge";
 
+/** The workspace-side command the host calls with each build log chunk while a build runs. */
+export const BUILD_LOG_COMMAND = "expoBridge.workspace.buildLog";
+
+export interface BuildLogChunk {
+  /** The build request's container folder, which names the build the chunk belongs to. */
+  folder: string;
+  chunk: string;
+}
+
 export type Action = "status" | "build" | "install" | "launch" | "screenshot";
 
 export const ACTIONS: readonly Action[] = ["status", "build", "install", "launch", "screenshot"];

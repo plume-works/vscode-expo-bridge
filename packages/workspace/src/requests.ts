@@ -1,7 +1,5 @@
-import * as fs from "node:fs";
-import * as path from "node:path";
 import {
-  WRITE_DIR_REL,
+  type BuildLogChunk,
   type Request,
   type Response,
   type StatusCheck,
@@ -21,43 +19,33 @@ export interface RequestOutcome {
   hostMissing: boolean;
 }
 
-/** Tail a log file, invoking `onLine` for each new line until `stop()` is called. */
-export function tailLog(logPath: string, onLine: (line: string) => void): () => void {
-  let offset = 0;
-  let closed = false;
-  const read = () => {
-    if (closed || !fs.existsSync(logPath)) return;
-    const fd = fs.openSync(logPath, "r");
-    try {
-      const stat = fs.fstatSync(fd);
-      if (stat.size > offset) {
-        const buf = Buffer.alloc(stat.size - offset);
-        fs.readSync(fd, buf, 0, buf.length, offset);
-        offset = stat.size;
-        for (const line of buf.toString("utf8").split("\n").slice(0, -1)) onLine(line);
-      }
-    } finally {
-      fs.closeSync(fd);
-    }
-  };
-  const timer = setInterval(read, 250);
-  return () => {
-    closed = true;
-    clearInterval(timer);
-    read();
-  };
-}
+/** Routes the host's build log chunks to the requests building each folder, as lines. */
+export class BuildLogs {
+  private readonly sinks = new Map<string, Set<(chunk: string) => void>>();
 
-export function newestBuildLog(folder: string, since: number): string | null {
-  const dir = path.join(folder, WRITE_DIR_REL);
-  if (!fs.existsSync(dir)) return null;
-  const logs = fs
-    .readdirSync(dir)
-    .filter((f) => f.startsWith("build-") && f.endsWith(".log"))
-    .map((f) => ({ f, m: fs.statSync(path.join(dir, f)).mtimeMs }))
-    .filter((x) => x.m >= since)
-    .sort((a, b) => b.m - a.m);
-  return logs.length ? path.join(dir, logs[0]!.f) : null;
+  /** Handle one call of `BUILD_LOG_COMMAND`; anything but a `BuildLogChunk` is ignored. */
+  receive(arg: unknown): void {
+    const { folder, chunk } = (arg ?? {}) as Partial<BuildLogChunk>;
+    if (typeof folder !== "string" || typeof chunk !== "string") return;
+    for (const sink of this.sinks.get(folder) ?? []) sink(chunk);
+  }
+
+  /** Pass `folder`'s log to `onLine` line by line; the returned stop emits an unended last line. */
+  open(folder: string, onLine: (line: string) => void): () => void {
+    let partial = "";
+    const sink = (chunk: string) => {
+      const lines = (partial + chunk).split("\n");
+      partial = lines.pop()!;
+      for (const line of lines) onLine(line);
+    };
+    const sinks = this.sinks.get(folder) ?? new Set();
+    this.sinks.set(folder, sinks.add(sink));
+    return () => {
+      sinks.delete(sink);
+      if (!sinks.size) this.sinks.delete(folder);
+      if (partial) onLine(partial);
+    };
+  }
 }
 
 /** VS Code rejects a command no extension host registered with this message. */
@@ -67,26 +55,16 @@ export function isCommandNotFound(e: unknown, command: string): boolean {
 }
 
 /**
- * Send one protocol request to the host, streaming the build log to `onLog` while a
- * `build` runs. The socket handler and the workspace UI both send requests through here.
+ * Send one protocol request to the host, passing `onLog` the build log `logs` receives while
+ * a `build` runs. The socket handler and the workspace UI both send requests through here.
  */
 export async function runRequest(
   request: Request,
   execute: Execute,
   onLog: (line: string) => void = () => {},
+  logs?: BuildLogs,
 ): Promise<RequestOutcome> {
-  let stopTail: (() => void) | undefined;
-  if (request.action === "build") {
-    const since = Date.now();
-    const poll = setInterval(() => {
-      const log = newestBuildLog(request.folder, since);
-      if (log) {
-        clearInterval(poll);
-        stopTail = tailLog(log, onLog);
-      }
-    }, 250);
-    stopTail = () => clearInterval(poll);
-  }
+  const stopLog = request.action === "build" ? logs?.open(request.folder, onLog) : undefined;
   try {
     const response = (await execute(DISPATCH_COMMAND, request)) as Response;
     return { response, hostMissing: false };
@@ -99,7 +77,7 @@ export async function runRequest(
       hostMissing: isCommandNotFound(e, DISPATCH_COMMAND),
     };
   } finally {
-    stopTail?.();
+    stopLog?.();
   }
 }
 
@@ -116,6 +94,8 @@ export interface RelayDeps {
   projectId: (folder: string) => Promise<ProjectId>;
   /** Sees every outcome, after the container's checks replaced the host's. */
   onOutcome?: (request: Request, outcome: RequestOutcome) => void;
+  /** Where the host's build log chunks arrive. */
+  buildLogs?: BuildLogs;
 }
 
 /**
@@ -128,7 +108,7 @@ export async function relayRequest(
   onLog: (line: string) => void,
   deps: RelayDeps,
 ): Promise<RequestOutcome> {
-  let outcome = await runRequest(request, execute, onLog);
+  let outcome = await runRequest(request, execute, onLog, deps.buildLogs);
   const { response } = outcome;
   if (request.action === "status" && response.ok) {
     const result = response.result as StatusResult;

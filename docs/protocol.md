@@ -181,7 +181,13 @@ is `latest`. eas-cli is never taken from the project's dependencies, which `expo
 flags. The build runs in the folder's Mac path, with the user's login environment plus `EXPO_TOKEN` from
 SecretStorage, `EAS_NO_VCS=1`, `CI=1`, and `EAS_LOCAL_BUILD_ARTIFACTS_DIR` set to a fresh
 directory in the host extension's private global storage. The log streams into a fresh
-`.tmp/expo-bridge/build-<ms>.log` while the build runs; `eas-host` tails it. The artifact
+`.tmp/expo-bridge/build-<ms>.log` while the build runs. The host also sends each chunk it
+writes to the workspace-side command `expoBridge.workspace.buildLog` as
+`{"folder":…,"chunk":…}`, one call at a time and all before the response; the workspace
+passes the folder's chunks, as lines, to the `log` frames and the panel's output channel.
+The container cannot tail the file: over Docker Desktop's file sharing it sees the log grow
+only when the host closes it. A workspace extension without the command gets no stream, and
+the host stops sending after the first failed call. The artifact
 is copied into `.tmp/expo-bridge/` when the build ends. A build that exits non-zero still
 succeeds as an action and reports its `exitCode`; `artifactRel` is empty when no artifact
 was produced. The host never runs `eas init`.
