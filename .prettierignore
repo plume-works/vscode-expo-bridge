@@ -1,3 +1,7 @@
 dist/
 *.vsix
 bun.lock
+
+# `iwe normalize` owns the knowledge base, and the iwe-bootstrap scaffold owns .iwe/.
+docs/knowledge/**
+.iwe/**

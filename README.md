@@ -28,6 +28,59 @@ working directory, so run it inside the Expo app's folder.
 The bridge is a consent surface, not a security boundary — see the protocol and threat
 model in `docs/protocol.md`.
 
+## Setting up a project
+
+The bridge needs nothing from the project beyond an Expo app with an `eas.json` build profile
+for the iOS Simulator, linked to its EAS project (`eas init`, run once from the container).
+In the project's `.devcontainer/devcontainer.json`, list the pack, forward Metro's port, and
+keep VS Code's auto-forward notification for that port from covering the bridge's own:
+
+```json
+{
+  "customizations": {
+    "vscode": {
+      "extensions": ["plume-works.vscode-expo-bridge"]
+    }
+  },
+  "forwardPorts": [8081],
+  "portsAttributes": {
+    "8081": { "label": "Metro", "onAutoForward": "silent" }
+  }
+}
+```
+
+Write no trust or security setting into the project: a workspace is trusted only on the Mac,
+when the bridge's first request asks. `EXPO_TOKEN` lives on the Mac too, in VS Code's secret
+storage, set with **Expo Bridge: Set EXPO_TOKEN**.
+
+The Mac needs Xcode with the iOS platform, CocoaPods, fastlane, Node, and a bun at least as
+new as the container's. `eas-host status` reports each as a check; **Expo Bridge: Fix Missing
+Tools** opens a Mac terminal with the commands that install what is missing, and the **Expo
+Bridge** panel in the container shows the same checks with their fixes.
+
+## Using `eas-host`
+
+Run `eas-host` inside the Expo app's folder, in this order:
+
+```bash
+eas-host status            # exits 0 when the bridge is available
+eas-host build <profile>   # builds the eas.json profile on the Mac; --clean forces a full build
+eas-host install           # installs the newest build under .tmp/expo-bridge/
+bunx expo start --dev-client --localhost --port 8081   # Metro, in the container
+eas-host launch            # starts the app; a development build loads from Metro
+eas-host screenshot        # writes a PNG under .tmp/expo-bridge/
+```
+
+Each result is one line of JSON on stdout, and build log lines stream to stderr. Exit codes:
+`0` success, `1` the action failed, `2` a usage error, `3` the bridge is unavailable.
+`eas-host --help` prints the same sequence. A development build whose native inputs are
+unchanged reuses the folder's earlier artifact in under a second and reports `mode: "reused"`.
+
+When `eas-host status` exits non-zero — a Codespace, a host other than a Mac, or the host
+extension not installed — build the same profile on EAS cloud instead:
+`bunx eas-cli@latest build -p ios --profile <profile>`. Device and store builds always go to
+EAS cloud: the bridge builds only for the Simulator.
+
 ## VSCodium
 
 VSCodium cannot use Microsoft's Dev Containers extension. The host extension finds the
