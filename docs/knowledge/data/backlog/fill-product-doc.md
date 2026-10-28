@@ -5,8 +5,8 @@ stage: done
 priority: high
 created: 2026-08-01
 generated:
-  by: human:author
-  at: 2026-08-01T00:00:00Z
+  by: claude-code/opus-5.5
+  at: 2026-10-28T19:40:00Z
 completed: 2026-10-28
 ---
 

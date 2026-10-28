@@ -3,8 +3,8 @@ type: hub
 description: Prioritized single-topic work items waiting to become a plan or a quick fix.
 stage: living
 generated:
-  by: human:author
-  at: 2026-08-01T00:00:00Z
+  by: claude-code/opus-5.5
+  at: 2026-10-28T19:40:00Z
 ---
 
 # 📋 Backlog
@@ -18,16 +18,10 @@ write a plan and link the plan instead.*
 
 [Ship an agent skill for the Expo bridge](backlog/expo-bridge-agent-skill.md)
 
-[Plan the first feature](backlog/plan-first-feature.md)
-
 [Revise the Expo bridge build controls after CMake
 Tools](backlog/expo-bridge-build-controls.md)
 
 ## Medium
-
-[Capture the current architecture](backlog/capture-current-architecture.md)
-
-[Import the existing backlog](backlog/import-existing-backlog.md)
 
 [Give the Expo bridge extensions icons](backlog/expo-bridge-icons.md)
 
@@ -51,3 +45,9 @@ bridge](backlog/document-expo-bridge-vscodium-support.md)
 
 [Make the Expo bridge self-explanatory to an
 agent](backlog/expo-bridge-agent-guidance.md)
+
+[Plan the first feature](backlog/plan-first-feature.md)
+
+[Capture the current architecture](backlog/capture-current-architecture.md)
+
+[Import the existing backlog](backlog/import-existing-backlog.md)

@@ -3,8 +3,8 @@ type: hub
 description: Implementation plans, migrations, and design proposals, one document per unit of work.
 stage: living
 generated:
-  by: human:author
-  at: 2026-08-01T00:00:00Z
+  by: claude-code/opus-5.5
+  at: 2026-10-28T19:40:00Z
 ---
 
 # 🗺️ Plans
