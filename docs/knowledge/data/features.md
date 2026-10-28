@@ -14,3 +14,5 @@ deprecation. The lifecycle stage lives in each document's frontmatter, so the
 list stays flat; group with `##` headings once it outgrows a single list. Stages
 and body sections are defined under Features in `SCHEMA.md` and enforced by
 `.iwe/schemas/feature.yaml`.*
+
+[VS Code Expo bridge](features/vscode-expo-bridge.md)

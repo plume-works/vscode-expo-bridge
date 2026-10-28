@@ -13,3 +13,6 @@ generated:
 idea in `someday/<slug>.md`. Frontmatter is `type: someday`, no pressure. When
 an idea gets real, promote it to a backlog task or straight to a plan and move
 the link.*
+
+[Build on the Mac for a Codespace through the Expo
+bridge](someday/expo-bridge-codespaces.md)
