@@ -16,6 +16,8 @@ write a plan and link the plan instead.*
 
 ## High
 
+[Ship an agent skill for the Expo bridge](backlog/expo-bridge-agent-skill.md)
+
 [Plan the first feature](backlog/plan-first-feature.md)
 
 [Revise the Expo bridge build controls after CMake
