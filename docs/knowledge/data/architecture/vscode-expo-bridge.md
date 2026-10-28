@@ -3,7 +3,7 @@ type: architecture
 description: How an Expo consumer's devcontainer builds, installs, launches, and screenshots its iOS app on the Mac that opened it — two VS Code extensions bridged by command routing, one socket per window, the request's workspace folder mapped to its Mac path through Docker, a fixed Expo-only action set, and a consent surface rather than a security boundary.
 generated:
   by: claude-code/opus-5.5
-  at: 2026-10-28T03:00:00Z
+  at: 2026-10-28T16:52:14Z
 sources:
 - resource: docs/knowledge/data/plans/20261026-expo-bridge-panel.md
 - resource: docs/knowledge/data/plans/20261015-vscode-expo-bridge.md
@@ -12,8 +12,7 @@ sources:
 - resource: docs/knowledge/data/plans/20261025-expo-bridge-bun-fix-resolved-bun.md
 - resource: docs/knowledge/data/plans/20261023-expo-bridge-fingerprint-reuse.md
 - resource: https://code.visualstudio.com/docs/devcontainers/containers
-- resource: https://github.com/plume-works/vscode-expo-bridge
-- resource: https://github.com/plume-works/vscode-expo-bridge/blob/main/docs/protocol.md
+- resource: docs/protocol.md
 - resource: https://docs.expo.dev/build-reference/local-builds/
 - resource: https://code.visualstudio.com/api/advanced-topics/remote-extensions
 ---
@@ -23,15 +22,17 @@ sources:
 ## Context
 
 An Expo consumer builds iOS on EAS cloud Macs from its Linux devcontainer
-([Template boundary](template-boundary.md), Optional Expo profile). When VS Code
-on a Mac opens that devcontainer, the Mac has Xcode and the iOS Simulator: a
-build there costs no EAS quota and lets agents see the running app. The bridge
-code lives in the sibling repository
-[plume-works/vscode-expo-bridge](https://github.com/plume-works/vscode-expo-bridge),
-which owns the protocol contract and security model in
-[`docs/protocol.md`](https://github.com/plume-works/vscode-expo-bridge/blob/main/docs/protocol.md).
-This repository owns only the template wiring, the EAS cloud fallback, and that
-setup grants no trust.
+([Template
+boundary](https://github.com/plume-works/agent-devcontainer/blob/main/docs/knowledge/data/architecture/template-boundary.md),
+Optional Expo profile). When VS Code on a Mac opens that devcontainer, the Mac
+has Xcode and the iOS Simulator: a build there costs no EAS quota and lets
+agents see the running app. This repository owns the bridge: its code, the
+protocol contract and security model in
+[`docs/protocol.md`](https://github.com/plume-works/vscode-expo-bridge/blob/main/docs/protocol.md),
+and its releases.
+[plume-works/agent-devcontainer](https://github.com/plume-works/agent-devcontainer)
+owns only the template wiring that lists the pack, the EAS cloud fallback, and
+that setup grants no trust.
 
 ## Approach
 

@@ -6,9 +6,8 @@ priority: medium
 description: Give the plume-works/vscode-expo-bridge extensions a marketplace icon and the bridge's status bar item and view container a recognisable icon.
 generated:
   by: claude-code/opus-5.5
-  at: 2026-10-26T04:20:00Z
+  at: 2026-10-28T16:52:14Z
 sources:
-- resource: https://github.com/plume-works/vscode-expo-bridge
 - resource: https://code.visualstudio.com/api/references/extension-manifest
 - resource: https://code.visualstudio.com/api/references/icons-in-labels
 ---

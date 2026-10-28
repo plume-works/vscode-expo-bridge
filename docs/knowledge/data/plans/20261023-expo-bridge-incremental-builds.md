@@ -6,10 +6,9 @@ release:
 description: Make a repeat `eas-host build` of an Expo iOS app on the Mac reuse the previous build's working directory, pods, and DerivedData from a per-workspace cache in the host extension's private global storage, with `eas-host build <profile> --clean` and a Mac-side Clean Build Cache command for a fresh build, the build mode reported in the result, disk use shown and capped, and protocol version 2 — spiked on a Mac before the details are designed.
 generated:
   by: claude-code/opus-5.5
-  at: 2026-10-23T18:22:28Z
+  at: 2026-10-28T16:52:14Z
 sources:
 - resource: docs/knowledge/data/plans/20261015-vscode-expo-bridge.md
-- resource: https://github.com/plume-works/vscode-expo-bridge
 - resource: https://github.com/plume-works/agent-expo-bridge-spikes
 - resource: https://docs.expo.dev/build-reference/local-builds/
 - resource: https://github.com/expo/eas-build

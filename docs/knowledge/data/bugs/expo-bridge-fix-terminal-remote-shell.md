@@ -3,9 +3,8 @@ type: bug
 description: The Expo bridge's one-click fix opens its Mac terminal with a shell path taken from the container's detected terminal profiles, so it fails to launch when the Mac's default profile name matches a container profile whose path does not exist on the Mac.
 generated:
   by: claude-code/opus-5.5
-  at: 2026-10-24T16:00:00Z
+  at: 2026-10-28T16:52:14Z
 sources:
-- resource: https://github.com/plume-works/vscode-expo-bridge
 - resource: https://github.com/microsoft/vscode/blob/main/src/vs/workbench/contrib/terminal/browser/terminalProcessManager.ts
 - resource: https://github.com/microsoft/vscode/blob/main/src/vs/workbench/contrib/terminal/browser/terminalProfileService.ts
 - resource: docs/knowledge/data/plans/20261015-vscode-expo-bridge.md

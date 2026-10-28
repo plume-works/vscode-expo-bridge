@@ -6,12 +6,11 @@ release:
 description: Make `eas-host build` of an Expo iOS development build reuse the workspace's earlier artifact when a cache key — the project's @expo/fingerprint, computed inside the confirmed build, plus the inputs the fingerprint leaves out — matches, with `eas-host build <profile> --clean` for a full build, the outcome reported in the result, a cache per workspace folder, and protocol version 2 kept.
 generated:
   by: claude-code/opus-5.5
-  at: 2026-10-25T03:09:30Z
+  at: 2026-10-28T16:52:14Z
 sources:
 - resource: docs/knowledge/data/plans/20261023-expo-bridge-incremental-builds.md
 - resource: docs/knowledge/data/plans/20261015-vscode-expo-bridge.md
 - resource: docs/knowledge/data/plans/20261023-expo-bridge-workspace-folders.md
-- resource: https://github.com/plume-works/vscode-expo-bridge
 - resource: https://docs.expo.dev/versions/latest/sdk/fingerprint/
 - resource: https://www.npmjs.com/package/eas-cli/v/25.3.0
 - resource: https://www.npmjs.com/package/@expo/build-tools/v/25.3.0

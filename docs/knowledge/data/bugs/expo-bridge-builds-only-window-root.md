@@ -3,9 +3,8 @@ type: bug
 description: The Expo bridge's host resolves every action to the devcontainer window's root folder, so an Expo app in a subdirectory or in another workspace folder cannot be checked or built, and `status` does not say which folder it inspected.
 generated:
   by: claude-code/opus-5.5
-  at: 2026-10-24T01:42:10Z
+  at: 2026-10-28T16:52:14Z
 sources:
-- resource: https://github.com/plume-works/vscode-expo-bridge
 - resource: docs/knowledge/data/features/vscode-expo-bridge.md
 - resource: docs/knowledge/data/architecture/vscode-expo-bridge.md
 stage: done

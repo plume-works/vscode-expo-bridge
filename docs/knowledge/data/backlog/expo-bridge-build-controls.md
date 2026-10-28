@@ -6,10 +6,9 @@ priority: high
 description: Revise the Expo bridge panel's build controls to follow the CMake Tools extension's layout and behaviour, including a way to stop a running build, which the bridge has none of.
 generated:
   by: claude-code/opus-5.5
-  at: 2026-10-28T06:00:00Z
+  at: 2026-10-28T16:52:14Z
 sources:
-- resource: https://github.com/plume-works/vscode-expo-bridge
-- resource: https://github.com/plume-works/vscode-expo-bridge/blob/main/docs/protocol.md
+- resource: docs/protocol.md
 - resource: https://github.com/microsoft/vscode-cmake-tools
 - resource: docs/knowledge/data/plans/20261026-expo-bridge-panel.md
 ---

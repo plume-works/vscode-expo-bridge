@@ -6,10 +6,9 @@ release:
 description: Open the Expo bridge's one-click fix terminal with the Mac's own default terminal profile, resolved from the VS Code settings and found on the Mac, falling back to the Mac login shell, so a container profile of the same name no longer supplies a path the Mac lacks.
 generated:
   by: claude-code/opus-5.5
-  at: 2026-10-24T12:00:00Z
+  at: 2026-10-28T16:52:14Z
 sources:
 - resource: docs/knowledge/data/bugs/expo-bridge-fix-terminal-remote-shell.md
-- resource: https://github.com/plume-works/vscode-expo-bridge
 - resource: https://github.com/microsoft/vscode/blob/main/src/vs/platform/terminal/common/terminalPlatformConfiguration.ts
 - resource: https://github.com/microsoft/vscode/blob/main/src/vs/workbench/contrib/terminal/browser/terminalProfileResolverService.ts
 stage: done

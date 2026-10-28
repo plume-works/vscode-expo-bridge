@@ -3,9 +3,8 @@ type: bug
 description: The Expo bridge host's CocoaPods fix runs brew install cocoapods, which leaves an installed but unlinked keg unlinked, so pod stays off the PATH and the check stays failing.
 generated:
   by: claude-code/opus-5.5
-  at: 2026-10-28T03:00:00Z
+  at: 2026-10-28T16:52:14Z
 sources:
-- resource: https://github.com/plume-works/vscode-expo-bridge
 - resource: docs/knowledge/data/plans/20261026-expo-bridge-panel.md
 ---
 

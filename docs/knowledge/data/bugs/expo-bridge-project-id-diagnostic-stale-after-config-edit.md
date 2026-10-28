@@ -3,9 +3,8 @@ type: bug
 description: After an Expo app config edit, the Expo bridge panel and Problems keep the easProjectId result of the last status until Re-run Status, although the container resolves the project ID itself.
 generated:
   by: claude-code/opus-5.5
-  at: 2026-10-28T03:00:00Z
+  at: 2026-10-28T16:52:14Z
 sources:
-- resource: https://github.com/plume-works/vscode-expo-bridge
 - resource: docs/knowledge/data/plans/20261026-expo-bridge-panel.md
 ---
 

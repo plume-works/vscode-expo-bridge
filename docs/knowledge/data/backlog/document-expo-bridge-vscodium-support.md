@@ -6,9 +6,8 @@ priority: medium
 description: Document in the plume-works/vscode-expo-bridge README which VSCodium dev container extension works with the Expo bridge, the runtime argument it needs, and which extensions do not work.
 generated:
   by: claude-code/opus-5.5
-  at: 2026-10-25T12:00:00Z
+  at: 2026-10-28T16:52:14Z
 sources:
-- resource: https://github.com/plume-works/vscode-expo-bridge
 - resource: https://github.com/s-h-a-d-o-w/dev-containers-oss
 - resource: https://open-vsx.org/extension/s-h-a-d-o-w/dev-containers-oss
 - resource: docs/knowledge/data/plans/20261015-vscode-expo-bridge.md

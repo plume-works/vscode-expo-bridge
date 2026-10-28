@@ -3,10 +3,9 @@ type: someday
 description: Let the VS Code Expo bridge build on the Mac for a Codespace opened from VS Code on that Mac, by packing the workspace in the container and sending it, and the results back, over VS Code's command routing instead of a shared folder.
 generated:
   by: claude-code/opus-5.5
-  at: 2026-10-23T09:00:00Z
+  at: 2026-10-28T16:52:14Z
 sources:
 - resource: docs/knowledge/data/plans/20261015-vscode-expo-bridge.md
-- resource: https://github.com/plume-works/vscode-expo-bridge
 ---
 
 # Build on the Mac for a Codespace through the Expo bridge

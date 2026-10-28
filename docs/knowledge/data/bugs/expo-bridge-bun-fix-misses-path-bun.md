@@ -3,9 +3,8 @@ type: bug
 description: The Expo bridge's bun fix installs Homebrew's bun, but the bun check runs the first bun on the Mac's login PATH, so a stale bun.sh install ahead of Homebrew keeps the fix offered forever.
 generated:
   by: claude-code/opus-5.5
-  at: 2026-10-25T22:22:41Z
+  at: 2026-10-28T16:52:14Z
 sources:
-- resource: https://github.com/plume-works/vscode-expo-bridge
 - resource: docs/knowledge/data/architecture/vscode-expo-bridge.md
 - resource: docs/knowledge/data/plans/20261025-expo-bridge-bun-fix-resolved-bun.md
 stage: done

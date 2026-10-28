@@ -6,11 +6,11 @@ release:
 description: Two VS Code extensions in the sibling repository plume-works/vscode-expo-bridge, bundled as one extension pack, that let agents in a devcontainer opened on a Mac build, install, launch, and screenshot an Expo iOS app on that Mac through a fixed Expo-only action set — trusted per workspace on the Mac, confirmed per build, and built unsandboxed as the Mac user — with EAS cloud as the fallback; the template's Expo profile lists the pack.
 generated:
   by: claude-code/opus-5.5
-  at: 2026-10-23T12:00:00Z
+  at: 2026-10-28T16:52:14Z
 sources:
-- resource: docs/knowledge/data/plans/20261014-expo-eas-template-profile.md
-- resource: .devcontainer/devcontainer.json
-- resource: .agents/plugins/agentdev/skills/template-consume/references/consumption-guide.md
+- resource: https://github.com/plume-works/agent-devcontainer/blob/main/docs/knowledge/data/plans/20261014-expo-eas-template-profile.md
+- resource: https://github.com/plume-works/agent-devcontainer/blob/main/.devcontainer/devcontainer.json
+- resource: https://github.com/plume-works/agent-devcontainer/blob/main/.agents/plugins/agentdev/skills/template-consume/references/consumption-guide.md
 - resource: https://docs.expo.dev/build-reference/local-builds/
 - resource: https://github.com/expo/eas-build
 - resource: https://code.visualstudio.com/api/advanced-topics/remote-extensions
@@ -20,7 +20,6 @@ sources:
 - resource: https://docs.github.com/en/actions/how-tos/secure-your-work/security-harden-deployments/oidc-in-azure
 - resource: https://learn.microsoft.com/entra/workload-id/workload-identities-github-immutable-subjects
 - resource: https://github.com/eclipse/openvsx/wiki/Publishing-Extensions
-- resource: https://github.com/plume-works/vscode-expo-bridge
 - resource: https://github.com/plume-works/agent-expo-bridge-spikes
 - resource: https://blog.theredguild.org/leveraging-vscode-internals-to-escape-containers/
 - resource: https://github.com/microsoft/vscode/issues/287765
@@ -33,11 +32,13 @@ completed: 2026-10-23
 
 ## Context
 
-The [Expo profile](20261014-expo-eas-template-profile.md) builds iOS on EAS
-cloud Macs from the Linux devcontainer. When that devcontainer is opened by VS
-Code on a Mac, the Mac itself has Xcode and the iOS Simulator, and a build there
-costs no EAS quota and lets agents see the running app. The user-facing behavior
-is the [VS Code Expo bridge](../features/vscode-expo-bridge.md) feature.
+The [Expo
+profile](https://github.com/plume-works/agent-devcontainer/blob/main/docs/knowledge/data/plans/20261014-expo-eas-template-profile.md)
+builds iOS on EAS cloud Macs from the Linux devcontainer. When that devcontainer
+is opened by VS Code on a Mac, the Mac itself has Xcode and the iOS Simulator,
+and a build there costs no EAS quota and lets agents see the running app. The
+user-facing behavior is the [VS Code Expo
+bridge](../features/vscode-expo-bridge.md) feature.
 
 The pieces that make this possible:
 
@@ -278,7 +279,7 @@ Assumptions:
   so a hostile workspace cannot re-prompt repeatedly.
 - The first workspace folder is the Expo project root.
 - CocoaPods and fastlane are owned by the one-click fix, not by the [macOS
-  bootstrap](20261013-macos-native-bootstrap.md).
+  bootstrap](https://github.com/plume-works/agent-devcontainer/blob/main/docs/knowledge/data/plans/20261013-macos-native-bootstrap.md).
 - After a container rebuild, a window runs the locally installed host extension
   without another click.
 - The Marketplace pages show a corrected pack README only from the next
@@ -421,13 +422,16 @@ extension; its findings are recorded under `## Verification results`
     in plume-works/agent-expo-bridge-spikes.
 - [x] When either check fails, it is recorded under `## Verification results`
   and the plan goes back to revise before Task 17.
-  - **Evidence:** Commit `363370b` records the nested-sandbox failure under
-    `## Verification results`.
+  - **Evidence:** Commit
+    [`363370b`](https://github.com/plume-works/agent-devcontainer/commit/363370b886746f0a26c8da9d4f326a2f6317a062)
+    records the nested-sandbox failure under `## Verification results`.
 - [x] When the build's inner tool sandboxes cannot be turned off for the build's
   process tree alone, it is recorded under `## Verification results` and the
   plan goes back to revise its containment before Task 17.
-  - **Evidence:** Commit `2455170` records under `## Verification results` that
-    the inner-sandbox override cannot be scoped to the build.
+  - **Evidence:** Commit
+    [`2455170`](https://github.com/plume-works/agent-devcontainer/commit/245517088a6620353147d81df2f376effe779ad8)
+    records under `## Verification results` that the inner-sandbox override
+    cannot be scoped to the build.
 
 ### Task 6: Spike what a container-side extension can do through VS Code commands
 
@@ -438,16 +442,17 @@ scratch extension, in a Dev Containers window on a Mac
   command the `ui` side registers, and the handler receives nothing that
   identifies the calling extension or host.
   - **Evidence:** See `## Verification results` → "Task 6: a command invocation
-    carries no caller identity", recorded in commit `267ac35`. Run 2026-10-21 on
-    a macOS Dev Containers window. Spike: `callBridge` in
+    carries no caller identity", recorded in commit
+    [`267ac35`](https://github.com/plume-works/agent-devcontainer/commit/267ac35d1decbc896abc0028e72901158b8d8097).
+    Run 2026-10-21 on a macOS Dev Containers window. Spike: `callBridge` in
     [`plume-works/agent-expo-bridge-spikes extensions/attacker/extension.js`](https://github.com/plume-works/agent-expo-bridge-spikes/blob/3409e51830b52545a8cfd911f2296423052a0617/extensions/attacker/extension.js).
 - [x] The attacker changes the workspace folders through
   `vscode.workspace.updateWorkspaceFolders`, and the `ui` side still resolves
   the window's original host path.
   - **Evidence:** See `## Verification results` → "Task 6", recorded in commit
-    `267ac35`. Run 2026-10-21: after the injected folder the `ui` side resolved
-    the original `dev-container+…` authority and host path. Spike: `swapFolders`
-    in
+    [`267ac35`](https://github.com/plume-works/agent-devcontainer/commit/267ac35d1decbc896abc0028e72901158b8d8097).
+    Run 2026-10-21: after the injected folder the `ui` side resolved the
+    original `dev-container+…` authority and host path. Spike: `swapFolders` in
     [`plume-works/agent-expo-bridge-spikes extensions/attacker/extension.js`](https://github.com/plume-works/agent-expo-bridge-spikes/blob/3409e51830b52545a8cfd911f2296423052a0617/extensions/attacker/extension.js).
 
 ### Task 7: Spike what the container reaches on the Mac without the bridge
@@ -460,8 +465,9 @@ Containers window on a Mac
   `workbench.action.terminal.sendSequence`); whether a command runs on the Mac
   is recorded.
   - **Evidence:** See `## Verification results` → "Task 7: the window already
-    grants the container host reach", recorded in commit `267ac35`. Run
-    2026-10-21: the marker command ran on the Mac with no prompt. Spike:
+    grants the container host reach", recorded in commit
+    [`267ac35`](https://github.com/plume-works/agent-devcontainer/commit/267ac35d1decbc896abc0028e72901158b8d8097).
+    Run 2026-10-21: the marker command ran on the Mac with no prompt. Spike:
     `localTerminalExec` in
     [`plume-works/agent-expo-bridge-spikes extensions/attacker/extension.js`](https://github.com/plume-works/agent-expo-bridge-spikes/blob/3409e51830b52545a8cfd911f2296423052a0617/extensions/attacker/extension.js).
 
@@ -1325,7 +1331,8 @@ xcrun simctl uninstall booted dev.plumeworks.expobridgespike
   build, run `eas-host status`; when it succeeds use `eas-host`, otherwise use
   EAS cloud.
 
-  - **Evidence:** Step 4 of `## Optional Expo setup` in commit `2ec13c2`
+  - **Evidence:** Step 4 of `## Optional Expo setup` in commit
+    [`2ec13c2`](https://github.com/plume-works/agent-devcontainer/commit/2ec13c230634126680ee78a69bcb07e2df5690e2)
     appends, verbatim after the command-translation line, the rule to run
     `eas-host status` first and use `eas-host` when it exits 0, otherwise
     `bunx eas-cli@latest build -p ios`.
@@ -1347,8 +1354,9 @@ Create: `docs/knowledge/data/architecture/vscode-expo-bridge.md`; Modify:
 - [x] `data/architecture/vscode-expo-bridge` records the design in `## Approach`
   with its security model and rejected alternatives, and links the sibling
   repository's protocol document; `data/architecture.md` links it.
-  - **Evidence:** Commit `d00d985` creates
-    `docs/knowledge/data/architecture/vscode-expo-bridge.md`, whose
+  - **Evidence:** Commit
+    [`d00d985`](https://github.com/plume-works/agent-devcontainer/commit/d00d985d9ccc1a9f62fa9e914e35b102390fa9c9)
+    creates `docs/knowledge/data/architecture/vscode-expo-bridge.md`, whose
     `## Approach` holds `### Security model`, `### Constraints`, and
     `### Rejected alternatives` and whose `## Context` links
     `plume-works/vscode-expo-bridge` `docs/protocol.md`, and adds its inclusion
@@ -1367,11 +1375,13 @@ Create: `docs/knowledge/data/architecture/vscode-expo-bridge.md`; Modify:
   Mac, enables the bridge, with **Reload Window** in windows already open, and
   that in a Codespace the workspace extension activates after one **Reload
   Window**.
-  - **Evidence:** Commit `a248b1a` adds, after the paragraph that follows step 6
-    of `## Optional Expo setup` in `consumption-guide.md`, a paragraph on **Expo
-    Bridge (Host)** disabled with **Install Locally** in the first window on a
-    Mac, one click once per Mac, **Reload Window** in windows already open, and
-    one **Developer: Reload Window** in a Codespace; Prettier check and
+  - **Evidence:** Commit
+    [`a248b1a`](https://github.com/plume-works/agent-devcontainer/commit/a248b1a71394ecb77b33d190b88ae385a7eb3c7d)
+    adds, after the paragraph that follows step 6 of `## Optional Expo setup` in
+    `consumption-guide.md`, a paragraph on **Expo Bridge (Host)** disabled with
+    **Install Locally** in the first window on a Mac, one click once per Mac,
+    **Reload Window** in windows already open, and one **Developer: Reload
+    Window** in a Codespace; Prettier check and
     `uv run validate_agent_files --recommend . --require-marketplace claude codex`
     (62/62 valid) pass.
 - [x] `data/architecture/vscode-expo-bridge` `## Approach` and the template
@@ -1379,21 +1389,23 @@ Create: `docs/knowledge/data/architecture/vscode-expo-bridge.md`; Modify:
   workspace extension in the container and that the host extension is installed
   locally by that one click, and the architecture doc's
   `### Rejected alternatives` records listing only the workspace extension.
-  - **Evidence:** Commit `a248b1a`: `## Approach` in
-    `architecture/vscode-expo-bridge.md` states that the listed pack installs
-    the workspace extension in the container and the host extension takes one
-    **Install Locally** click once per Mac, and its `### Rejected alternatives`
-    lists listing only the workspace extension; `## Optional Expo profile` in
-    `template-boundary.md` states the same install split; `iwe schema validate`
-    passes.
+  - **Evidence:** Commit
+    [`a248b1a`](https://github.com/plume-works/agent-devcontainer/commit/a248b1a71394ecb77b33d190b88ae385a7eb3c7d):
+    `## Approach` in `architecture/vscode-expo-bridge.md` states that the listed
+    pack installs the workspace extension in the container and the host
+    extension takes one **Install Locally** click once per Mac, and its
+    `### Rejected alternatives` lists listing only the workspace extension;
+    `## Optional Expo profile` in `template-boundary.md` states the same install
+    split; `iwe schema validate` passes.
 
 ### Task 29: Validate the catalog change
 
 - [x] `uv run validate_agent_files --recommend . --require-marketplace claude codex`
   passes.
-  - **Evidence:** Run on the tree of commit `25d756c` (the Task 27 and 28
-    catalog and knowledge changes, including the silenced Metro port): 62/62
-    skills valid, 0 errors, 0 warnings.
+  - **Evidence:** Run on the tree of commit
+    [`25d756c`](https://github.com/plume-works/agent-devcontainer/commit/25d756cd30eb6c6b55826af087cc4d01b0dceb32)
+    (the Task 27 and 28 catalog and knowledge changes, including the silenced
+    Metro port): 62/62 skills valid, 0 errors, 0 warnings.
 
 ### Task 30: End to end on a Mac from the released pack
 
@@ -1403,12 +1415,13 @@ Create: `docs/knowledge/data/architecture/vscode-expo-bridge.md`; Modify:
   shows the host extension disabled with **Install Locally**; one click on it
   puts the host extension in the local extension host.
   - **Evidence:** Run on 2026-10-23 on the Mac with the t21 app adopted from
-    this repository at `c9bea80` (Workflow B, `"expo"`), after
-    `code --uninstall-extension` left the Mac with no `plume-works` extension:
-    the container's `code --list-extensions` listed the pack, `-host`, and
-    `-workspace` 0.2.0, and the Extensions view showed the host extension
-    "disabled in this workspace because it is defined to run in the Local
-    Extension Host" with **Install Locally**. After that one click,
+    this repository at
+    [`c9bea80`](https://github.com/plume-works/agent-devcontainer/commit/c9bea808d2584d9c020e512d3632cbc6882e75a8)
+    (Workflow B, `"expo"`), after `code --uninstall-extension` left the Mac with
+    no `plume-works` extension: the container's `code --list-extensions` listed
+    the pack, `-host`, and `-workspace` 0.2.0, and the Extensions view showed
+    the host extension "disabled in this workspace because it is defined to run
+    in the Local Extension Host" with **Install Locally**. After that one click,
     `eas-host status` in the container returned `available: true` with `macHost`
     and `hostPathExists` ok, answered by the host extension on the Mac.
 - [x] In that window `eas-host status` succeeds, and `eas-host build` with a
@@ -1424,10 +1437,12 @@ Create: `docs/knowledge/data/architecture/vscode-expo-bridge.md`; Modify:
   local extension host with no further click, and `eas-host status` succeeds.
   - **Evidence:** Run on 2026-10-23 on the Mac in the same consumer,
     `plume-works/expo-bridge-t21` `template-adoption` (`.agent.metadata.json`:
-    `consumed_ref` `c9bea80`, `optional_bundles: ["expo"]`), with the pack 0.2.0
-    that release run 39907262994 published: after **Dev Containers: Rebuild
-    Container**, with no click, `eas-host status` returned `available: true`
-    with `macHost`, `hostPathExists`, and `workspaceTrusted` ok.
+    `consumed_ref`
+    [`c9bea80`](https://github.com/plume-works/agent-devcontainer/commit/c9bea808d2584d9c020e512d3632cbc6882e75a8),
+    `optional_bundles: ["expo"]`), with the pack 0.2.0 that release run
+    39907262994 published: after **Dev Containers: Rebuild Container**, with no
+    click, `eas-host status` returned `available: true` with `macHost`,
+    `hostPathExists`, and `workspaceTrusted` ok.
 
 ### Task 31: Fallback when the bridge is unavailable
 
@@ -1447,7 +1462,8 @@ Create: `docs/knowledge/data/architecture/vscode-expo-bridge.md`; Modify:
 
 ## Spec changes
 
-Modifies [Template consumption](../spec/template-consumption.md):
+Modifies [Template
+consumption](https://github.com/plume-works/agent-devcontainer/blob/main/docs/knowledge/data/spec/template-consumption.md):
 
 ``` markdown
 ## ADDED Requirements
@@ -1501,8 +1517,9 @@ The protocol contract and security model are specified in
 
 ## Depends on
 
-- [Expo profile for template adoption](20261014-expo-eas-template-profile.md) —
-  Task 27 extends its `## Optional Expo setup` section and its `## Expo`
+- [Expo profile for template
+  adoption](https://github.com/plume-works/agent-devcontainer/blob/main/docs/knowledge/data/plans/20261014-expo-eas-template-profile.md)
+  — Task 27 extends its `## Optional Expo setup` section and its `## Expo`
   `AGENTS.md` section.
 
 ## Verification
@@ -1582,8 +1599,9 @@ therefore the narrower one in `## Approach`: the bridge adds no reach beyond
 what the window grants, and gates its own `build` behind trust and confirmation.
 The forwarded SSH and GPG agents are a devcontainer-wide exposure independent of
 this feature, recorded as the someday idea [Narrow the devcontainer's forwarded
-agent exposure](../someday/devcontainer-forwarded-agent-exposure.md) for
-research into whether it can be narrowed without breaking the workflows that
+agent
+exposure](https://github.com/plume-works/agent-devcontainer/blob/main/docs/knowledge/data/someday/devcontainer-forwarded-agent-exposure.md)
+for research into whether it can be narrowed without breaking the workflows that
 rely on it.
 
 ### Task 6: a command invocation carries no caller identity
@@ -1740,48 +1758,53 @@ which the host extension runs there too.
 
 Verified anchor points (line numbers as of 2026-10-23):
 
-- `.devcontainer/devcontainer.json:53` — `forwardPorts`
-- `.devcontainer/devcontainer.json:54` — `portsAttributes`, the map the Expo
-  profile's `8081` entry joins
-- `.devcontainer/devcontainer.json:115` — `customizations.vscode.extensions`
-- `.devcontainer/docker-compose.yml:84` — the workspace bind mount at
-  `/workspaces/<basename>`
+- `plume-works/agent-devcontainer` `.devcontainer/devcontainer.json:53` —
+  `forwardPorts`
+- `plume-works/agent-devcontainer` `.devcontainer/devcontainer.json:54` —
+  `portsAttributes`, the map the Expo profile's `8081` entry joins
+- `plume-works/agent-devcontainer` `.devcontainer/devcontainer.json:115` —
+  `customizations.vscode.extensions`
+- `plume-works/agent-devcontainer` `.devcontainer/docker-compose.yml:84` — the
+  workspace bind mount at `/workspaces/<basename>`
 - `.gitignore:11` — `.tmp/` ignored
-- `ansible/roles/bash_setup/tasks/main.yml:3` — `~/.local/bin` on `PATH`
-- `.agents/plugins/agentdev/skills/template-consume/SKILL.md:50` —
+- `plume-works/agent-devcontainer` `ansible/roles/bash_setup/tasks/main.yml:3` —
+  `~/.local/bin` on `PATH`
+- `plume-works/agent-devcontainer`
+  `.agents/plugins/agentdev/skills/template-consume/SKILL.md:50` —
   `optional_bundles` row of the marker table
-- `.agents/plugins/agentdev/skills/template-consume/references/consumption-guide.md:928`
+- `plume-works/agent-devcontainer`
+  `.agents/plugins/agentdev/skills/template-consume/references/consumption-guide.md:928`
   — `## Optional Expo setup`
-- `.agents/plugins/agentdev/skills/template-consume/references/consumption-guide.md:991`
+- `plume-works/agent-devcontainer`
+  `.agents/plugins/agentdev/skills/template-consume/references/consumption-guide.md:991`
   — step 6, the `devcontainer.json` edits; `:1006` — the paragraph on what the
   pack does once the devcontainer opens; `:1015` — the **Install Locally** and
   **Reload Window** paragraph
 - `docs/knowledge/data/architecture/vscode-expo-bridge.md:32` — the pack and
   where each extension runs; `:127` — `### Rejected alternatives`
-- `docs/knowledge/data/architecture/template-boundary.md:256` —
+- `plume-works/agent-devcontainer`
+  `docs/knowledge/data/architecture/template-boundary.md:256` —
   `## Optional Expo profile`
-- `docs/knowledge/data/architecture/template-boundary.md:269` — the
+- `plume-works/agent-devcontainer`
+  `docs/knowledge/data/architecture/template-boundary.md:269` — the
   `forwardPorts` sentence
-- `docs/knowledge/data/spec/template-consumption.md:82` — Requirement: adoption
+- `plume-works/agent-devcontainer`
+  `docs/knowledge/data/spec/template-consumption.md:82` — Requirement: adoption
   is recorded for later updates
-- `plume-works/vscode-expo-bridge` `.github/workflows/ci.yml:20` — the bun pin
-  the release workflow matches; `:29` — `bun run package`
-- `plume-works/vscode-expo-bridge` `.github/workflows/release.yml:5` — the
-  strict `vX.Y.Z` tag trigger; `:48` — the publish job's `environment: release`;
-  `:76` and `:81` — the Marketplace and Open VSX publish steps
-- `plume-works/vscode-expo-bridge` `packages/release/src/release.ts` —
-  `checkTag`, `channelOf`
-- `plume-works/vscode-expo-bridge` `package.json:19` — the `bump` script; `:24`
-  — the `@vscode/vsce` pin; `:25` — `ovsx`
-- `plume-works/vscode-expo-bridge` `packages/release/src/bump.ts:5` —
-  `EXTENSIONS`, the three packages that share one version
-- `plume-works/vscode-expo-bridge` `packages/host/package.json:51`,
-  `packages/workspace/package.json:27`, `packages/pack/package.json:24` — the
-  `vsce package` scripts
-- `plume-works/vscode-expo-bridge` `README.md:7` — installing the pack; `:16` —
-  the devcontainer-listed pack and **Install Locally**;
-  `packages/pack/README.md:4` — where each extension runs; `:7` — the
-  devcontainer-listed pack and **Install Locally**
-- `plume-works/vscode-expo-bridge` `packages/host/src/hostpath.ts:11` —
-  `decodeHostPath`, which reads the Mac path from a `dev-container+<hex>`
-  authority
+- `.github/workflows/ci.yml:20` — the bun pin the release workflow matches;
+  `:29` — `bun run package`
+- `.github/workflows/release.yml:5` — the strict `vX.Y.Z` tag trigger; `:48` —
+  the publish job's `environment: release`; `:76` and `:81` — the Marketplace
+  and Open VSX publish steps
+- `packages/release/src/release.ts` — `checkTag`, `channelOf`
+- `package.json:19` — the `bump` script; `:24` — the `@vscode/vsce` pin; `:25` —
+  `ovsx`
+- `packages/release/src/bump.ts:5` — `EXTENSIONS`, the three packages that share
+  one version
+- `packages/host/package.json:51`, `packages/workspace/package.json:27`,
+  `packages/pack/package.json:24` — the `vsce package` scripts
+- `README.md:7` — installing the pack; `:16` — the devcontainer-listed pack and
+  **Install Locally**; `packages/pack/README.md:4` — where each extension runs;
+  `:7` — the devcontainer-listed pack and **Install Locally**
+- `packages/host/src/hostpath.ts:11` — `decodeHostPath`, which reads the Mac
+  path from a `dev-container+<hex>` authority

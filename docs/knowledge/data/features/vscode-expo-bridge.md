@@ -4,13 +4,12 @@ stage: implemented
 description: Agents in a devcontainer opened by VS Code on a Mac build, install, launch, and screenshot an Expo iOS app on that Mac through the vscode-expo-bridge extension's fixed Expo-only action set, with EAS cloud as the fallback.
 generated:
   by: claude-code/opus-5.5
-  at: 2026-10-28T03:00:00Z
+  at: 2026-10-28T16:52:14Z
 sources:
 - resource: docs/knowledge/data/plans/20261026-expo-bridge-panel.md
 - resource: docs/knowledge/data/plans/20261015-vscode-expo-bridge.md
 - resource: docs/knowledge/data/plans/20261023-expo-bridge-workspace-folders.md
 - resource: docs/knowledge/data/plans/20261023-expo-bridge-fingerprint-reuse.md
-- resource: https://github.com/plume-works/vscode-expo-bridge
 - resource: https://code.visualstudio.com/docs/devcontainers/containers
 ---
 
@@ -18,10 +17,11 @@ sources:
 
 ## Purpose
 
-[Expo apps build for iOS through EAS](expo-eas-builds.md) from the Linux
-devcontainer on Expo's cloud Macs. When VS Code opens that devcontainer on a
-Mac, the Mac already has Xcode and the iOS Simulator; building there costs no
-EAS quota and lets agents see the running app.
+[Expo apps build for iOS through
+EAS](https://github.com/plume-works/agent-devcontainer/blob/main/docs/knowledge/data/features/expo-eas-builds.md)
+from the Linux devcontainer on Expo's cloud Macs. When VS Code opens that
+devcontainer on a Mac, the Mac already has Xcode and the iOS Simulator; building
+there costs no EAS quota and lets agents see the running app.
 
 ## Behaviour
 

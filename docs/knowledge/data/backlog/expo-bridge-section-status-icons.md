@@ -6,9 +6,8 @@ priority: medium
 description: Give each section of the Expo bridge panel an icon that rolls up its items — green when all pass, else the icon of its most severe failing item — so a collapsed section still shows its state.
 generated:
   by: claude-code/opus-5.5
-  at: 2026-10-28T06:30:00Z
+  at: 2026-10-28T16:52:14Z
 sources:
-- resource: https://github.com/plume-works/vscode-expo-bridge
 - resource: docs/knowledge/data/plans/20261026-expo-bridge-panel.md
 ---
 

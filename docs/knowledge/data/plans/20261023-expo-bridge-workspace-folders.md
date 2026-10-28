@@ -8,12 +8,11 @@ release:
 description: Make every `eas-host` action reach the VS Code window it runs in and act on the workspace folder that contains its working directory — one socket per window found through a registry, the folder mapped to its Mac path through the devcontainer's Docker bind mounts, trust still keyed to the window's host path, and protocol version 2.
 generated:
   by: claude-code/opus-5.5
-  at: 2026-10-24T01:42:10Z
+  at: 2026-10-28T16:52:14Z
 sources:
 - resource: docs/knowledge/data/bugs/expo-bridge-builds-only-window-root.md
 - resource: docs/knowledge/data/bugs/expo-bridge-shared-socket-across-windows.md
 - resource: docs/knowledge/data/plans/20261015-vscode-expo-bridge.md
-- resource: https://github.com/plume-works/vscode-expo-bridge
 - resource: https://code.visualstudio.com/docs/devcontainers/containers
 stage: done
 completed: 2026-10-24
@@ -361,8 +360,9 @@ repository opened in a Dev Containers window and an Expo app under it
   directory; the architecture document describes the registry, the Docker
   mapping, and the trust rule in its security model, with this plan's rejected
   alternatives; each bug's `## Fix` describes the fix.
-  - **Evidence:** commit `e9a193e` updates the four documents; `iwe normalize`
-    and `iwe schema validate` pass.
+  - **Evidence:** commit
+    [`e9a193e`](https://github.com/plume-works/agent-devcontainer/commit/e9a193e583ad6b70e2ba9a3cac663b5edb1fc722)
+    updates the four documents; `iwe normalize` and `iwe schema validate` pass.
 
 ## Spec changes
 

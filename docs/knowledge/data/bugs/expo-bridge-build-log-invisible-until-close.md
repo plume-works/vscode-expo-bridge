@@ -3,9 +3,8 @@ type: bug
 description: The container does not see the Mac's build log grow while the host holds it open, so the Expo bridge streams no build log lines; the log appears only when the build ends and the host closes it.
 generated:
   by: claude-code/opus-5.5
-  at: 2026-10-28T06:09:33Z
+  at: 2026-10-28T16:52:14Z
 sources:
-- resource: https://github.com/plume-works/vscode-expo-bridge
 - resource: docs/knowledge/data/plans/20261026-expo-bridge-panel.md
 - resource: docs/knowledge/data/bugs/expo-bridge-build-log-tail-drops-lines.md
 stage: done

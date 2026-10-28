@@ -7,10 +7,10 @@ priority: high
 description: Make the Expo bridge self-explanatory to an agent — the template's Expo AGENTS.md rule names the action order and starting Metro before launch, and the sibling's eas-host help states the sequence and artifact location and install defaults to the latest build.
 generated:
   by: claude-code/opus-5.5
-  at: 2026-10-23T08:30:00Z
+  at: 2026-10-28T16:52:14Z
 sources:
-- resource: .agents/plugins/agentdev/skills/template-consume/references/consumption-guide.md
-- resource: https://github.com/plume-works/vscode-expo-bridge/blob/main/packages/workspace/src/cli-args.ts
+- resource: https://github.com/plume-works/agent-devcontainer/blob/main/.agents/plugins/agentdev/skills/template-consume/references/consumption-guide.md
+- resource: packages/workspace/src/cli-args.ts
 - resource: docs/knowledge/data/plans/20261015-vscode-expo-bridge.md
 - resource: https://github.com/plume-works/vscode-expo-bridge/releases/tag/v0.2.1
 ---

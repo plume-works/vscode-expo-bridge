@@ -3,10 +3,9 @@ type: bug
 description: The Expo bridge's "Add a simulator build profile" quick fix inserts a profile without the bun pin that every eas.json build profile of a template consumer carries.
 generated:
   by: claude-code/opus-5.5
-  at: 2026-10-28T03:00:00Z
+  at: 2026-10-28T16:52:14Z
 sources:
-- resource: https://github.com/plume-works/vscode-expo-bridge
-- resource: docs/knowledge/data/features/expo-eas-builds.md
+- resource: https://github.com/plume-works/agent-devcontainer/blob/main/docs/knowledge/data/features/expo-eas-builds.md
 - resource: docs/knowledge/data/plans/20261026-expo-bridge-panel.md
 ---
 
