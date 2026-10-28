@@ -293,13 +293,18 @@ export function activate(context: vscode.ExtensionContext): void {
         const folder = request?.folder;
         const logs =
           request?.action === "build" && typeof folder === "string"
-            ? new LogForwarder((chunk) =>
-                Promise.resolve(
-                  vscode.commands.executeCommand(BUILD_LOG_COMMAND, {
-                    folder,
-                    chunk,
-                  } satisfies BuildLogChunk),
-                ),
+            ? new LogForwarder(
+                (chunk) =>
+                  Promise.resolve(
+                    vscode.commands.executeCommand(BUILD_LOG_COMMAND, {
+                      folder,
+                      chunk,
+                    } satisfies BuildLogChunk),
+                  ),
+                (e) =>
+                  void vscode.window.showWarningMessage(
+                    `Expo Bridge: the build log stopped streaming to the container: ${String((e as Error)?.message ?? e)}`,
+                  ),
               )
             : undefined;
         const make = buildDispatchDeps(

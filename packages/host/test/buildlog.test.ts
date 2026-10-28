@@ -34,16 +34,32 @@ describe("LogForwarder", () => {
     expect(sent).toEqual(["a", "b"]);
   });
 
-  test("stops sending after a failed call, and drain still resolves", async () => {
+  test("stops sending after a failed call, reports it once, and drain still resolves", async () => {
     let calls = 0;
-    const logs = new LogForwarder(async () => {
-      calls++;
-      throw new Error("command 'expoBridge.workspace.buildLog' not found");
-    });
+    const stops: unknown[] = [];
+    const logs = new LogForwarder(
+      async () => {
+        calls++;
+        throw new Error("command 'expoBridge.workspace.buildLog' not found");
+      },
+      (e) => stops.push(e),
+    );
     logs.push("a");
     await logs.drain();
     logs.push("b");
     await logs.drain();
     expect(calls).toBe(1);
+    expect(stops.map(String)).toEqual(["Error: command 'expoBridge.workspace.buildLog' not found"]);
+  });
+
+  test("drain waits for a chunk pushed as the last call settles", async () => {
+    const sent: string[] = [];
+    const logs = new LogForwarder(async (chunk) => {
+      sent.push(chunk);
+      if (chunk === "a") queueMicrotask(() => logs.push("b"));
+    });
+    logs.push("a");
+    await logs.drain();
+    expect(sent).toEqual(["a", "b"]);
   });
 });
