@@ -154,6 +154,14 @@ asks for trust and reports the answer rather than failing.
 booted on demand; the detail names the device that would boot), and `port8081Forwarded`
 (`127.0.0.1:8081` on the Mac accepts a connection).
 
+The workspace extension replaces `easProjectId` in every `status` result it relays, to
+`eas-host` or to its own panel, with the container's resolution of the folder's app config:
+the folder's own `node_modules/.bin/expo config --json --type public`, which evaluates
+`app.config.js` or `app.config.ts`, or `app.json` read as JSON when there is no local `expo`
+and no dynamic config. A dynamic config without a local `expo` reports the check as failing
+with a detail saying it could not be resolved. Evaluating the config in the container runs
+only the container's own code; the host still evaluates no project code to answer `status`.
+
 `protocolVersion` carries the host's protocol version, currently `2`.
 
 ### `build`
@@ -173,7 +181,13 @@ is `latest`. eas-cli is never taken from the project's dependencies, which `expo
 flags. The build runs in the folder's Mac path, with the user's login environment plus `EXPO_TOKEN` from
 SecretStorage, `EAS_NO_VCS=1`, `CI=1`, and `EAS_LOCAL_BUILD_ARTIFACTS_DIR` set to a fresh
 directory in the host extension's private global storage. The log streams into a fresh
-`.tmp/expo-bridge/build-<ms>.log` while the build runs; `eas-host` tails it. The artifact
+`.tmp/expo-bridge/build-<ms>.log` while the build runs. The host also sends each chunk it
+writes to the workspace-side command `expoBridge.workspace.buildLog` as
+`{"folder":…,"chunk":…}`, one call at a time and all before the response; the workspace
+passes the folder's chunks, as lines, to the `log` frames and the panel's build terminal.
+The container cannot tail the file: over Docker Desktop's file sharing it sees the log grow
+only when the host closes it. A workspace extension without the command gets no stream, and
+the host stops sending after the first failed call. The artifact
 is copied into `.tmp/expo-bridge/` when the build ends. A build that exits non-zero still
 succeeds as an action and reports its `exitCode`; `artifactRel` is empty when no artifact
 was produced. The host never runs `eas init`.
@@ -357,3 +371,9 @@ acceptance, and `xcodebuild -downloadPlatform iOS`. While a fix runs, the status
 shows it running and offers nothing to click; when its commands finish, or its terminal
 closes, the host re-runs `status` and the item clears or shows what still fails. No protocol
 action can start a fix.
+
+The workspace extension's panel and its Problems quick fixes start a fix only by running
+`expoBridge.fix` with no arguments, which opens the same picker on the Mac; the picker still
+decides what runs. They reach the token and trust only through `expoBridge.setToken` and
+`expoBridge.manageTrust`, also without arguments, and a build from the panel sends the same
+`build` request as `eas-host build`, behind the same trust and confirmation.

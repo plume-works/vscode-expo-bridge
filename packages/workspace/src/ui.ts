@@ -1,0 +1,219 @@
+import { execFileSync } from "node:child_process";
+import * as fs from "node:fs";
+import * as path from "node:path";
+import * as vscode from "vscode";
+import type { Request } from "@plume-works/expo-bridge-protocol";
+import { containerBunVersion } from "./cli-args";
+import { buildMessage, HOST_COMMANDS, profileKey } from "./actions";
+import { PendingWrites } from "./buildterminal";
+import { DIAGNOSTIC_SOURCE, registerQuickFixes } from "./codeactions";
+import { diagnosticsFor, readFolderFiles, type BridgeDiagnostic } from "./diagnostics";
+import { buildProfiles, easJsonChecks, readEasJson } from "./easjson";
+import { Panel, PANEL_VIEW } from "./panel";
+import type { FolderView } from "./panelmodel";
+import type { RequestOutcome } from "./requests";
+import { statusBarState } from "./statusbar";
+import type { StatusStore } from "./statusstore";
+
+export interface UiDeps {
+  store: StatusStore;
+  /** Relay one request the way the socket does, so the UI and `eas-host` agree. */
+  relay: (request: Request, onLog?: (line: string) => void) => Promise<RequestOutcome>;
+  workspaceFolders: () => string[];
+}
+
+export interface Ui {
+  /** Rebuild everything the UI derives from the store and the folders' config files. */
+  refresh(): void;
+}
+
+/** The window's workspace folders that hold an `eas.json`. */
+function expoFolders(deps: UiDeps): string[] {
+  return deps.workspaceFolders().filter((f) => fs.existsSync(path.join(f, "eas.json")));
+}
+
+/** Send one `status` request per Expo folder, carrying the container's bun as `eas-host` does. */
+export async function requestStatus(deps: UiDeps): Promise<void> {
+  const bun = containerBunVersion((file, args) => execFileSync(file, args, { encoding: "utf8" }));
+  await Promise.all(
+    expoFolders(deps).map((folder) =>
+      deps.relay({ action: "status", folder, ...(bun ? { containerBunVersion: bun } : {}) }),
+    ),
+  );
+}
+
+/** Pick one of the window's Expo folders: the only one, or the user's choice. */
+async function pickFolder(deps: UiDeps): Promise<string | undefined> {
+  const folders = expoFolders(deps);
+  if (folders.length <= 1) return folders[0];
+  const pick = await vscode.window.showQuickPick(
+    folders.map((f) => ({ label: path.basename(f), description: f, folder: f })),
+    { title: "Expo Bridge: pick the Expo folder" },
+  );
+  return pick?.folder;
+}
+
+const SEVERITIES: Record<BridgeDiagnostic["severity"], vscode.DiagnosticSeverity> = {
+  error: vscode.DiagnosticSeverity.Error,
+  warning: vscode.DiagnosticSeverity.Warning,
+  info: vscode.DiagnosticSeverity.Information,
+};
+
+/** Replace every bridge diagnostic with the current folders' failing checks. */
+function publishDiagnostics(collection: vscode.DiagnosticCollection, views: FolderView[]): void {
+  collection.clear();
+  const byFile = new Map<string, vscode.Diagnostic[]>();
+  for (const view of views) {
+    for (const d of diagnosticsFor(view, readFolderFiles(view.folder))) {
+      const diagnostic = new vscode.Diagnostic(
+        new vscode.Range(d.start.line, d.start.character, d.end.line, d.end.character),
+        d.message,
+        SEVERITIES[d.severity],
+      );
+      diagnostic.source = DIAGNOSTIC_SOURCE;
+      diagnostic.code = d.code;
+      const file = path.join(view.folder, d.file);
+      byFile.set(file, [...(byFile.get(file) ?? []), diagnostic]);
+    }
+  }
+  for (const [file, diagnostics] of byFile) collection.set(vscode.Uri.file(file), diagnostics);
+}
+
+export function activateUi(context: vscode.ExtensionContext, deps: UiDeps): Ui {
+  const remembered = (folder: string) => context.workspaceState.get<string>(profileKey(folder));
+
+  const views = (): FolderView[] =>
+    expoFolders(deps).map((folder) => ({
+      folder,
+      name: path.basename(folder),
+      state: deps.store.get(folder),
+      easProblems: easJsonChecks(readEasJson(folder), remembered(folder)),
+    }));
+
+  /** Ask for the folder's build profile and remember the answer. */
+  const pickProfile = async (folder: string): Promise<string | undefined> => {
+    const profiles = buildProfiles(readEasJson(folder));
+    if (!profiles.length) {
+      void vscode.window.showErrorMessage(`Expo Bridge: ${folder}/eas.json has no build profiles.`);
+      return undefined;
+    }
+    const profile = await vscode.window.showQuickPick(profiles, {
+      title: `Expo Bridge: build profile for ${path.basename(folder)}`,
+    });
+    if (profile) {
+      await context.workspaceState.update(profileKey(folder), profile);
+      refresh();
+    }
+    return profile;
+  };
+
+  // A terminal, not an output channel, so eas-cli's colours render; reopened once closed.
+  let buildLog: { terminal: vscode.Terminal; writeLine: (line: string) => void } | undefined;
+  const openBuildLog = () => {
+    if (buildLog) return buildLog;
+    const emitter = new vscode.EventEmitter<string>();
+    const writes = new PendingWrites((text) => emitter.fire(text));
+    const terminal = vscode.window.createTerminal({
+      name: "Expo Bridge Build",
+      pty: { onDidWrite: emitter.event, open: () => writes.open(), close: () => emitter.dispose() },
+    });
+    buildLog = { terminal, writeLine: (line) => writes.write(`${line}\r\n`) };
+    return buildLog;
+  };
+
+  let building = false;
+  const build = async (clean: boolean) => {
+    if (building) {
+      void vscode.window.showInformationMessage("Expo Bridge: a build is already running.");
+      return;
+    }
+    const folder = await pickFolder(deps);
+    if (!folder) return;
+    const known = remembered(folder);
+    const profile =
+      known && buildProfiles(readEasJson(folder)).includes(known)
+        ? known
+        : await pickProfile(folder);
+    if (!profile) return;
+    building = true;
+    try {
+      const log = openBuildLog();
+      log.terminal.show(true);
+      log.writeLine(`--- ${clean ? "clean build" : "build"} ${profile} in ${folder}`);
+      const outcome = await deps.relay(
+        { action: "build", folder, profile, ...(clean ? { clean: true } : {}) },
+        log.writeLine,
+      );
+      const message = buildMessage(profile, outcome);
+      log.writeLine(message.text);
+      if (message.error) void vscode.window.showErrorMessage(message.text);
+      else void vscode.window.showInformationMessage(message.text);
+    } finally {
+      building = false;
+    }
+  };
+
+  // Host commands take no arguments, so the Mac's own prompts decide what runs.
+  const host = (command: string) => () => void vscode.commands.executeCommand(command);
+
+  const panel = new Panel(views);
+  const tree = vscode.window.createTreeView(PANEL_VIEW, { treeDataProvider: panel });
+
+  // The first status runs when the panel is first seen; never await a view during activation.
+  let checked = false;
+  const firstLook = () => {
+    if (checked || !tree.visible) return;
+    checked = true;
+    void requestStatus(deps);
+  };
+  tree.onDidChangeVisibility(firstLook);
+  setTimeout(firstLook, 0);
+
+  const item = vscode.window.createStatusBarItem(
+    "expoBridge.status",
+    vscode.StatusBarAlignment.Left,
+  );
+  item.name = "Expo Bridge";
+  item.command = "workbench.view.extension.expoBridge";
+
+  const diagnostics = vscode.languages.createDiagnosticCollection("expoBridge");
+
+  const refresh = () => {
+    panel.refresh();
+    const current = views();
+    publishDiagnostics(diagnostics, current);
+    const state = statusBarState(current);
+    if (!state) return item.hide();
+    item.text = state.text;
+    item.tooltip = state.tooltip;
+    item.show();
+  };
+  context.subscriptions.push(
+    panel,
+    tree,
+    item,
+    diagnostics,
+    ...registerQuickFixes(deps.workspaceFolders),
+    vscode.window.onDidCloseTerminal((t) => {
+      if (t === buildLog?.terminal) buildLog = undefined;
+    }),
+    { dispose: () => buildLog?.terminal.dispose() },
+    vscode.commands.registerCommand("expoBridge.panel.refresh", () => requestStatus(deps)),
+    vscode.commands.registerCommand("expoBridge.panel.build", () => build(false)),
+    vscode.commands.registerCommand("expoBridge.panel.cleanBuild", () => build(true)),
+    vscode.commands.registerCommand("expoBridge.panel.changeProfile", async () => {
+      const folder = await pickFolder(deps);
+      if (folder) await pickProfile(folder);
+    }),
+    vscode.commands.registerCommand("expoBridge.panel.fix", host(HOST_COMMANDS.fix)),
+    vscode.commands.registerCommand("expoBridge.panel.setToken", host(HOST_COMMANDS.setToken)),
+    vscode.commands.registerCommand(
+      "expoBridge.panel.manageTrust",
+      host(HOST_COMMANDS.manageTrust),
+    ),
+    deps.store.onDidChange(refresh),
+    vscode.workspace.onDidChangeWorkspaceFolders(refresh),
+  );
+  refresh();
+  return { refresh };
+}

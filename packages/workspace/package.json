@@ -3,7 +3,7 @@
   "displayName": "Expo Bridge (Workspace)",
   "description": "Container-side half of the Expo Bridge: installs the eas-host command and bridges it to the Mac host.",
   "publisher": "plume-works",
-  "version": "0.2.6",
+  "version": "0.4.0",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -22,11 +22,174 @@
   "activationEvents": [
     "workspaceContains:eas.json"
   ],
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "expoBridge",
+          "title": "Expo Bridge",
+          "icon": "media/expo-bridge.svg"
+        }
+      ]
+    },
+    "views": {
+      "expoBridge": [
+        {
+          "id": "expoBridge.panel",
+          "name": "Status"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "expoBridge.panel",
+        "when": "expoBridge.panelState == no-project",
+        "contents": "No workspace folder of this window has an eas.json, so there is no Expo project for the bridge to build."
+      },
+      {
+        "view": "expoBridge.panel",
+        "when": "expoBridge.panelState == not-checked",
+        "contents": "The bridge has not been checked in this window yet."
+      },
+      {
+        "view": "expoBridge.panel",
+        "when": "expoBridge.panelState == failed",
+        "contents": "The last status request failed. The panel shows the reason once a status succeeds."
+      },
+      {
+        "view": "expoBridge.panel",
+        "when": "expoBridge.panelState == host-missing",
+        "contents": "The Mac half of the Expo Bridge is not installed on this window's machine. Install it locally once per Mac, then reload the window.\n[Show the Mac half](command:workbench.extensions.search?%5B%22%40id%3Aplume-works.vscode-expo-bridge-host%22%5D)"
+      },
+      {
+        "view": "expoBridge.panel",
+        "when": "expoBridge.panelState == unavailable-macHost",
+        "contents": "The bridge is unavailable: this window's machine is not a Mac. EAS cloud builds still work."
+      },
+      {
+        "view": "expoBridge.panel",
+        "when": "expoBridge.panelState == unavailable-hostPathExists",
+        "contents": "The bridge is unavailable: the workspace does not exist at its host path on this Mac. EAS cloud builds still work."
+      },
+      {
+        "view": "expoBridge.panel",
+        "when": "expoBridge.panelState == unavailable-workspaceMapped",
+        "contents": "The bridge is unavailable: the folder does not map to a path on this Mac. EAS cloud builds still work."
+      }
+    ],
+    "commands": [
+      {
+        "command": "expoBridge.panel.refresh",
+        "title": "Re-run Status",
+        "category": "Expo Bridge",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "expoBridge.panel.build",
+        "title": "Build",
+        "category": "Expo Bridge",
+        "icon": "$(play)"
+      },
+      {
+        "command": "expoBridge.panel.cleanBuild",
+        "title": "Clean Build",
+        "category": "Expo Bridge"
+      },
+      {
+        "command": "expoBridge.panel.changeProfile",
+        "title": "Change Build Profile",
+        "category": "Expo Bridge"
+      },
+      {
+        "command": "expoBridge.panel.fix",
+        "title": "Fix…",
+        "category": "Expo Bridge",
+        "icon": "$(wrench)"
+      },
+      {
+        "command": "expoBridge.panel.setToken",
+        "title": "Set EXPO_TOKEN",
+        "category": "Expo Bridge",
+        "icon": "$(key)"
+      },
+      {
+        "command": "expoBridge.panel.manageTrust",
+        "title": "Manage Trust",
+        "category": "Expo Bridge",
+        "icon": "$(shield)"
+      },
+      {
+        "command": "expoBridge.quickfix.runInTerminal",
+        "title": "Run Quick Fix in a Terminal",
+        "category": "Expo Bridge"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "expoBridge.panel.refresh",
+          "when": "view == expoBridge.panel",
+          "group": "navigation@1"
+        },
+        {
+          "command": "expoBridge.panel.build",
+          "when": "view == expoBridge.panel",
+          "group": "navigation@2"
+        },
+        {
+          "command": "expoBridge.panel.cleanBuild",
+          "when": "view == expoBridge.panel",
+          "group": "build@1"
+        },
+        {
+          "command": "expoBridge.panel.changeProfile",
+          "when": "view == expoBridge.panel",
+          "group": "build@2"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "expoBridge.panel.fix",
+          "when": "view == expoBridge.panel && viewItem == expoBridge.check.fixable",
+          "group": "inline"
+        },
+        {
+          "command": "expoBridge.panel.setToken",
+          "when": "view == expoBridge.panel && viewItem == expoBridge.check.expoToken",
+          "group": "inline"
+        },
+        {
+          "command": "expoBridge.panel.manageTrust",
+          "when": "view == expoBridge.panel && viewItem == expoBridge.check.workspaceTrusted",
+          "group": "inline"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "expoBridge.panel.fix",
+          "when": "false"
+        },
+        {
+          "command": "expoBridge.panel.setToken",
+          "when": "false"
+        },
+        {
+          "command": "expoBridge.panel.manageTrust",
+          "when": "false"
+        },
+        {
+          "command": "expoBridge.quickfix.runInTerminal",
+          "when": "false"
+        }
+      ]
+    }
+  },
   "scripts": {
     "build": "bun build src/extension.ts --outdir dist --target node --format cjs --external vscode && bun build bin/eas-host.ts --outdir dist --target node --format cjs",
     "package": "bun run build && vsce package --no-dependencies $VSCE_PACKAGE_FLAGS --out vscode-expo-bridge-workspace.vsix"
   },
   "dependencies": {
-    "@plume-works/expo-bridge-protocol": "workspace:*"
+    "@plume-works/expo-bridge-protocol": "workspace:*",
+    "jsonc-parser": "3.3.1"
   }
 }

@@ -34,6 +34,15 @@ export function parseRegistryEntry(value: unknown): RegistryEntry | null {
 /** Every write the host extension makes under the workspace lands here, and nowhere else. */
 export const WRITE_DIR_REL = ".tmp/expo-bridge";
 
+/** The workspace-side command the host calls with each build log chunk while a build runs. */
+export const BUILD_LOG_COMMAND = "expoBridge.workspace.buildLog";
+
+export interface BuildLogChunk {
+  /** The build request's container folder, which names the build the chunk belongs to. */
+  folder: string;
+  chunk: string;
+}
+
 export type Action = "status" | "build" | "install" | "launch" | "screenshot";
 
 export const ACTIONS: readonly Action[] = ["status", "build", "install", "launch", "screenshot"];
@@ -162,4 +171,25 @@ export type Response = { ok: true; result: Result } | { ok: false; error: Protoc
 
 export function isAction(value: unknown): value is Action {
   return typeof value === "string" && (ACTIONS as readonly string[]).includes(value);
+}
+
+const COMPARATOR_RE =
+  /^(?:[<>]=?|=|~|\^)?(?:\d+|[xX*])(?:\.(?:\d+|[xX*])){0,2}(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
+
+/**
+ * A semver version or range with the spaces after its operators removed, so it reads as
+ * one `bunx` spec; null for `file:`, git, URL, alias, and dist-tag specs.
+ */
+export function normalizeRange(spec: string): string | null {
+  if (!spec.trim()) return null;
+  const sets = spec.split("||").map((set) => {
+    const tokens = set
+      .trim()
+      .replace(/([<>]=?|=|~|\^)\s+/g, "$1")
+      .split(/\s+/);
+    const comparators =
+      tokens.length === 3 && tokens[1] === "-" ? [tokens[0]!, tokens[2]!] : tokens;
+    return comparators.every((t) => COMPARATOR_RE.test(t)) ? tokens.join(" ") : null;
+  });
+  return sets.every((set) => set !== null) ? sets.join(" || ") : null;
 }

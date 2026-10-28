@@ -35,6 +35,8 @@ export interface BuildDeps {
   /** Already passed trust + the build confirmation; build() does not prompt. */
   confirmed: boolean;
   now: () => number;
+  /** Sees every chunk written to the build log, as it is written. */
+  onLog?: (chunk: string) => void;
 }
 
 export interface BuildOptions {
@@ -88,7 +90,11 @@ export async function build(
   const fresh = openFreshUnique(path.join(outDir, `build-${d.now()}.log`));
   const logFd = fresh.fd;
   const logRel = path.relative(d.folderHostPath, fresh.written);
-  const log = (line: string) => fs.writeSync(logFd, `expo-bridge: ${line}\n`);
+  const write = (text: string) => {
+    fs.writeSync(logFd, text);
+    d.onLog?.(text);
+  };
+  const log = (line: string) => write(`expo-bridge: ${line}\n`);
   const tar = lookupTool("tar", d.env, d.fileExists) ?? "/usr/bin/tar";
   const cache = new BuildCache(d.globalStorage, d.hostPath, d.folderHostPath, {
     runner: d.runner,
@@ -157,7 +163,7 @@ export async function build(
           "--profile",
           profile,
         ],
-        { env, cwd: d.folderHostPath, onOutput: (chunk) => fs.writeSync(logFd, chunk) },
+        { env, cwd: d.folderHostPath, onOutput: write },
       );
 
       let artifactRel = "";

@@ -186,6 +186,20 @@ describe("invocation", () => {
     ]);
   });
 
+  test("passes onLog every chunk it writes to the log, in order", async () => {
+    const chunks: string[] = [];
+    const runner: Runner = {
+      async run(_file, _args, opts) {
+        opts?.onOutput?.("step one\n");
+        opts?.onOutput?.("step two\n");
+        return { code: 0, stdout: "", stderr: "" };
+      },
+    };
+    const r = await build("development", deps({ runner, onLog: (c) => chunks.push(c) }));
+    expect(chunks.join("")).toBe(fs.readFileSync(path.join(hostPath, r.logRel), "utf8"));
+    expect(chunks).toContain("step one\n");
+  });
+
   test("reports a non-zero exit code", async () => {
     const r = await build(
       "development",
