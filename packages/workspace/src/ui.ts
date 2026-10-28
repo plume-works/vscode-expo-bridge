@@ -4,7 +4,8 @@ import * as path from "node:path";
 import * as vscode from "vscode";
 import type { Request } from "@plume-works/expo-bridge-protocol";
 import { containerBunVersion } from "./cli-args";
-import { buildMessage, HOST_COMMANDS, plainLogLine, profileKey } from "./actions";
+import { buildMessage, HOST_COMMANDS, profileKey } from "./actions";
+import { PendingWrites } from "./buildterminal";
 import { DIAGNOSTIC_SOURCE, registerQuickFixes } from "./codeactions";
 import { diagnosticsFor, readFolderFiles, type BridgeDiagnostic } from "./diagnostics";
 import { buildProfiles, easJsonChecks, readEasJson } from "./easjson";
@@ -106,7 +107,20 @@ export function activateUi(context: vscode.ExtensionContext, deps: UiDeps): Ui {
     return profile;
   };
 
-  const output = vscode.window.createOutputChannel("Expo Bridge Build");
+  // A terminal, not an output channel, so eas-cli's colours render; reopened once closed.
+  let buildLog: { terminal: vscode.Terminal; writeLine: (line: string) => void } | undefined;
+  const openBuildLog = () => {
+    if (buildLog) return buildLog;
+    const emitter = new vscode.EventEmitter<string>();
+    const writes = new PendingWrites((text) => emitter.fire(text));
+    const terminal = vscode.window.createTerminal({
+      name: "Expo Bridge Build",
+      pty: { onDidWrite: emitter.event, open: () => writes.open(), close: () => emitter.dispose() },
+    });
+    buildLog = { terminal, writeLine: (line) => writes.write(`${line}\r\n`) };
+    return buildLog;
+  };
+
   let building = false;
   const build = async (clean: boolean) => {
     if (building) {
@@ -123,14 +137,15 @@ export function activateUi(context: vscode.ExtensionContext, deps: UiDeps): Ui {
     if (!profile) return;
     building = true;
     try {
-      output.show(true);
-      output.appendLine(`--- ${clean ? "clean build" : "build"} ${profile} in ${folder}`);
+      const log = openBuildLog();
+      log.terminal.show(true);
+      log.writeLine(`--- ${clean ? "clean build" : "build"} ${profile} in ${folder}`);
       const outcome = await deps.relay(
         { action: "build", folder, profile, ...(clean ? { clean: true } : {}) },
-        (line) => output.appendLine(plainLogLine(line)),
+        log.writeLine,
       );
       const message = buildMessage(profile, outcome);
-      output.appendLine(message.text);
+      log.writeLine(message.text);
       if (message.error) void vscode.window.showErrorMessage(message.text);
       else void vscode.window.showInformationMessage(message.text);
     } finally {
@@ -179,7 +194,10 @@ export function activateUi(context: vscode.ExtensionContext, deps: UiDeps): Ui {
     item,
     diagnostics,
     ...registerQuickFixes(deps.workspaceFolders),
-    output,
+    vscode.window.onDidCloseTerminal((t) => {
+      if (t === buildLog?.terminal) buildLog = undefined;
+    }),
+    { dispose: () => buildLog?.terminal.dispose() },
     vscode.commands.registerCommand("expoBridge.panel.refresh", () => requestStatus(deps)),
     vscode.commands.registerCommand("expoBridge.panel.build", () => build(false)),
     vscode.commands.registerCommand("expoBridge.panel.cleanBuild", () => build(true)),

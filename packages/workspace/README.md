@@ -17,7 +17,7 @@ This extension runs in the devcontainer (`extensionKind: ["workspace"]`). It ins
   says what that means. Drag it to the bottom panel or the secondary sidebar like any view.
 - **Build** builds the folder's remembered profile, asking once and remembering the answer
   per folder; **Change Build Profile** asks again, and **Clean Build** builds in full. The log
-  streams to the **Expo Bridge Build** output channel.
+  streams to the **Expo Bridge Build** terminal.
 - **Fix…**, **Set EXPO_TOKEN**, and **Manage Trust** open the Mac half's own picker and
   prompts; nothing runs on the Mac without a click there.
 - **The status bar item** reads `Expo Bridge: OK`, `N issues`, `unavailable`,

@@ -184,7 +184,7 @@ directory in the host extension's private global storage. The log streams into a
 `.tmp/expo-bridge/build-<ms>.log` while the build runs. The host also sends each chunk it
 writes to the workspace-side command `expoBridge.workspace.buildLog` as
 `{"folder":…,"chunk":…}`, one call at a time and all before the response; the workspace
-passes the folder's chunks, as lines, to the `log` frames and the panel's output channel.
+passes the folder's chunks, as lines, to the `log` frames and the panel's build terminal.
 The container cannot tail the file: over Docker Desktop's file sharing it sees the log grow
 only when the host closes it. A workspace extension without the command gets no stream, and
 the host stops sending after the first failed call. The artifact

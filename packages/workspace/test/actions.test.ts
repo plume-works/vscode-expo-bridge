@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { BuildResult } from "@plume-works/expo-bridge-protocol";
-import { buildMessage, HOST_COMMANDS, plainLogLine, profileKey } from "../src/actions";
+import { buildMessage, HOST_COMMANDS, profileKey } from "../src/actions";
 
 const built = (result: BuildResult) => ({
   response: { ok: true as const, result },
@@ -60,26 +60,5 @@ describe("HOST_COMMANDS", () => {
       "expoBridge.setToken",
       "expoBridge.manageTrust",
     ]);
-  });
-});
-
-describe("plainLogLine", () => {
-  test("drops colour codes, keeping the text", () => {
-    expect(plainLogLine("[INSTALL_PODS] \x1b[36m\x1b[1m[Codegen]\x1b[0m Analyzing /tmp/x")).toBe(
-      "[INSTALL_PODS] [Codegen] Analyzing /tmp/x",
-    );
-  });
-
-  test("drops cursor moves, OSC titles and links, and a trailing carriage return", () => {
-    expect(plainLogLine("\x1b[2K\x1b[1Gdone\r")).toBe("done");
-    expect(plainLogLine("\x1b]0;title\x07a\x1b]8;;https://x\x1b\\link\x1b]8;;\x1b\\")).toBe(
-      "alink",
-    );
-  });
-
-  test("leaves a plain line alone", () => {
-    expect(plainLogLine("expo-bridge: clean build requested")).toBe(
-      "expo-bridge: clean build requested",
-    );
   });
 });
