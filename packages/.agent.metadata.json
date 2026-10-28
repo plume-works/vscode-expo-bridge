@@ -1,0 +1,13 @@
+{
+  "iwe-map": {
+    "digest_ignore": {
+      "*/package.json": [
+        {
+          "pattern": "(?m)^(  \"version\": )\"\\d+\\.\\d+\\.\\d+\"",
+          "replace": "\\1\"<VERSION>\"",
+          "reason": "Every change runs `bun run bump`, which moves the shared version of the pack, host, and workspace extensions (AGENTS.md, Rules every change keeps)."
+        }
+      ]
+    }
+  }
+}
