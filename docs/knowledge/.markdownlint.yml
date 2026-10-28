@@ -1,0 +1,11 @@
+---
+# markdownlint does not run in this tree. `iwe normalize` is the sole formatter
+# for docs/knowledge, and CI enforces that normalizing is a no-op
+# (validate-knowledge-base.yml). Prettier already steps aside here for the same
+# reason — see the matching entry in .prettierignore.
+#
+# iwe's output is not adjustable (.iwe/config.toml exposes only wrap_column, and
+# the CLI takes only --verbose), so any rule markdownlint reports here is one
+# nothing in this tree is able to fix. `default: false` disables every rule; the
+# root .markdownlint.yml is deliberately not extended, so nothing leaks back in.
+default: false
