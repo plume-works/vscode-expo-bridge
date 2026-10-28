@@ -4,7 +4,7 @@ import * as path from "node:path";
 import * as vscode from "vscode";
 import type { Request } from "@plume-works/expo-bridge-protocol";
 import { containerBunVersion } from "./cli-args";
-import { buildMessage, HOST_COMMANDS, profileKey } from "./actions";
+import { buildMessage, HOST_COMMANDS, plainLogLine, profileKey } from "./actions";
 import { DIAGNOSTIC_SOURCE, registerQuickFixes } from "./codeactions";
 import { diagnosticsFor, readFolderFiles, type BridgeDiagnostic } from "./diagnostics";
 import { buildProfiles, easJsonChecks, readEasJson } from "./easjson";
@@ -127,7 +127,7 @@ export function activateUi(context: vscode.ExtensionContext, deps: UiDeps): Ui {
       output.appendLine(`--- ${clean ? "clean build" : "build"} ${profile} in ${folder}`);
       const outcome = await deps.relay(
         { action: "build", folder, profile, ...(clean ? { clean: true } : {}) },
-        (line) => output.appendLine(line),
+        (line) => output.appendLine(plainLogLine(line)),
       );
       const message = buildMessage(profile, outcome);
       output.appendLine(message.text);

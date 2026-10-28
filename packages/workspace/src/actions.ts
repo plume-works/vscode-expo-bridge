@@ -13,6 +13,14 @@ export const HOST_COMMANDS = {
   manageTrust: "expoBridge.manageTrust",
 } as const;
 
+// CSI sequences (colours, cursor moves), OSC sequences (titles, links), and two-byte escapes.
+const ANSI = /\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b[@-Z\\-_]/g;
+
+/** A build log line as an output channel can show it, which renders no terminal escapes. */
+export function plainLogLine(line: string): string {
+  return line.replace(ANSI, "").replace(/\r$/, "");
+}
+
 /** What a finished build reports: the notification text and whether it is an error. */
 export function buildMessage(
   profile: string,
