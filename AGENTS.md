@@ -46,21 +46,21 @@ the IWE skills (`/agentdev:iwe-plan`, `/agentdev:iwe-implement`, …).
 
 ## Packaging the extensions for a manual test
 
-Collect every packaged VSIX in one folder, `.tmp/vscode-exts/` at the repository root
-(ignored by git), replacing what an earlier run left there:
+`bun run package` writes each VSIX next to its package (`packages/<name>/*.vsix`, ignored
+by git). Hand the user these commands verbatim, both run from the repository root.
+
+In a terminal on the Mac, which installs all three; the host extension is ui-kind, so this
+is the install that takes effect for it:
 
 ```bash
-bun run package
-rm -rf .tmp/vscode-exts && mkdir -p .tmp/vscode-exts && cp packages/*/*.vsix .tmp/vscode-exts/
+find packages -maxdepth 2 -name '*.vsix' | xargs -I{} code --install-extension {} --force
 ```
 
-Hand the user the install command with the folder's path, run in a terminal on the Mac:
+When the change touches `packages/workspace`, also in a terminal inside the Dev Containers
+window, since the workspace extension runs in the container:
 
 ```bash
-find .tmp/vscode-exts/ -name '*.vsix' | xargs -I{} code --install-extension {} --force
+code --install-extension packages/workspace/vscode-expo-bridge-workspace.vsix --force
 ```
 
-The host extension is ui-kind, so the Mac install is the one that takes effect. The
-workspace extension runs in the container: when the change touches `packages/workspace`, the
-user also installs `vscode-expo-bridge-workspace.vsix` from a terminal inside the Dev
-Containers window, from a path that container can read.
+Then **Developer: Reload Window** in each window that should pick up the new build.
